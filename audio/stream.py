@@ -1,4 +1,4 @@
-"""Audio stream manager - duplex loopback with debug logging"""
+"""Audio stream manager - duplex loopback with effect chain support"""
 
 from typing import Callable, Optional
 
@@ -10,30 +10,50 @@ from audio.recorder import AudioRecorder
 from audio.player import AudioPlayer
 from audio.device_manager import DeviceManager
 from config.settings import SAMPLE_RATE, CHANNELS, BLOCKSIZE, DTYPE
+from effects.manager import EffectManager
 
 ProcessFunc = Callable[[np.ndarray, int, object, object], np.ndarray]
 
 
 class AudioStream:
-    """Duplex audio stream: mic input -> process chain -> speaker output.
+    """Duplex audio stream: mic input -> effect chain -> speaker output.
 
-    Uses a single sd.Stream(input=True, output=True) for minimum latency.
-    Inject processing via set_process_func().
+    Processing priority (first match wins):
+        1. If effect_manager has effects -> run the effect chain
+        2. If _process_func is set -> call it directly
+        3. Otherwise -> passthrough (copy input to output)
     """
 
     def __init__(
         self,
         recorder: Optional[AudioRecorder] = None,
         player: Optional[AudioPlayer] = None,
+        effect_manager: Optional[EffectManager] = None,
     ) -> None:
         self._recorder = recorder or AudioRecorder()
         self._player = player or AudioPlayer()
+        self._effect_manager = effect_manager
         self._process_func: Optional[ProcessFunc] = None
         self._stream: Optional[sd.Stream] = None
         self._callback_count: int = 0
 
     # ------------------------------------------------------------------
-    # processing chain
+    # effect manager
+    # ------------------------------------------------------------------
+    @property
+    def effect_manager(self) -> Optional[EffectManager]:
+        return self._effect_manager
+
+    @effect_manager.setter
+    def effect_manager(self, manager: Optional[EffectManager]) -> None:
+        self._effect_manager = manager
+        if manager:
+            logger.info("effect manager attached ({} effects)", len(manager))
+        else:
+            logger.info("effect manager detached")
+
+    # ------------------------------------------------------------------
+    # legacy single-function hook (kept for backward compatibility)
     # ------------------------------------------------------------------
     def set_process_func(self, func: Optional[ProcessFunc]) -> None:
         self._process_func = func
@@ -57,22 +77,30 @@ class AudioStream:
             if status:
                 logger.warning("audio status: {}", status)
 
-            # log input volume every ~2 seconds (assuming 48kHz, 256 block -> ~187 callbacks/sec)
+            # debug: log input volume periodically
             if self._callback_count % 400 == 1:
                 in_rms = float(np.sqrt(np.mean(indata ** 2)))
                 logger.debug("input RMS: {:.6f}  (count={})", in_rms, self._callback_count)
 
-            processed = indata
-            if self._process_func is not None:
+            # priority: effect_manager > process_func > passthrough
+            if self._effect_manager is not None and not self._effect_manager.is_empty:
+                try:
+                    processed = self._effect_manager.process(indata, frames, time_info, status)
+                except Exception as e:
+                    logger.error("effect chain error: {}", e)
+                    processed = indata
+            elif self._process_func is not None:
                 try:
                     processed = self._process_func(indata, frames, time_info, status)
                 except Exception as e:
-                    logger.error("process callback error: {}", e)
+                    logger.error("process func error: {}", e)
                     processed = indata
+            else:
+                processed = indata
 
             outdata[:] = processed
 
-            # log output volume periodically
+            # debug: log output volume periodically
             if self._callback_count % 400 == 1:
                 out_rms = float(np.sqrt(np.mean(outdata ** 2)))
                 logger.debug("output RMS: {:.6f}", out_rms)
@@ -81,7 +109,6 @@ class AudioStream:
         out_dev = ply_params["device"]
         sr = rec_params["samplerate"]
 
-        # try to open stream; if sample rate mismatch causes failure, fall back to device default
         try:
             self._stream = sd.Stream(
                 samplerate=sr,
@@ -95,7 +122,6 @@ class AudioStream:
             self._stream.start()
         except sd.PortAudioError as e:
             logger.error("failed to open stream at {}Hz: {}", sr, e)
-            # try with device default samplerate
             fallback_sr = None
             if in_dev is not None:
                 fallback_sr = sd.query_devices(in_dev)["default_samplerate"]
@@ -124,6 +150,8 @@ class AudioStream:
         logger.info("  block size: {}", rec_params["blocksize"])
         logger.info("  input device: {}", in_name)
         logger.info("  output device: {}", out_name)
+        if self._effect_manager:
+            logger.info("  effects: {}", len(self._effect_manager))
 
     def stop(self) -> None:
         if self._stream is None:
