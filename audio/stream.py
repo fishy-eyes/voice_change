@@ -171,3 +171,14 @@ class AudioStream:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+    def stop(self) -> None:
+        if self._stream is None:
+            return
+        try:
+            self._stream.stop()
+            self._stream.close()
+        except Exception as e:
+            logger.warning("error stopping stream: {}", e)
+        finally:
+            self._stream = None
+        logger.info("audio stream stopped")
