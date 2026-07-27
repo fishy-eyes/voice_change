@@ -5,25 +5,25 @@ import sys
 
 from utils.logger import setup_logger
 from loguru import logger
+from audio.device_manager import DeviceManager
 from audio.recorder import AudioRecorder
 from audio.player import AudioPlayer
 from audio.stream import AudioStream
 
 
 def main() -> None:
-    """程序入口：启动实时音频回环。"""
+    """程序入口：选择设备并启动实时音频回环。"""
     setup_logger()
 
-    # 列出可用设备（方便调试）
-    logger.info("=== 输入设备 ===")
-    for d in AudioRecorder.list_devices():
-        logger.info("  [{}] {}", d["index"], d["name"])
-    logger.info("=== 输出设备 ===")
-    for d in AudioPlayer.list_devices():
-        logger.info("  [{}] {}", d["index"], d["name"])
+    # 打印所有可用设备
+    DeviceManager.print_devices()
 
-    recorder = AudioRecorder()
-    player = AudioPlayer()
+    # 交互式选择输入/输出设备
+    input_idx = DeviceManager.select_input_device()
+    output_idx = DeviceManager.select_output_device()
+
+    recorder = AudioRecorder(device=input_idx)
+    player = AudioPlayer(device=output_idx)
     stream = AudioStream(recorder, player)
 
     # 直通模式，不挂载任何处理函数

@@ -8,6 +8,7 @@ from loguru import logger
 
 from audio.recorder import AudioRecorder
 from audio.player import AudioPlayer
+from audio.device_manager import DeviceManager
 from config.settings import SAMPLE_RATE, CHANNELS, BLOCKSIZE, DTYPE
 
 # 处理回调签名：接收 (input_data, frame_count, time_info, status)
@@ -62,7 +63,6 @@ class AudioStream:
         def _callback(indata, outdata, frames, time_info, status):
             if status:
                 logger.debug("音频状态: {}", status)
-            # 默认直通
             processed = indata
             if self._process_func is not None:
                 try:
@@ -82,9 +82,12 @@ class AudioStream:
             latency=(rec_params["latency"], ply_params["latency"]),
         )
         self._stream.start()
-        logger.info("音频流已启动 | 采样率 {} | 块大小 {} | 设备 {}",
-                     rec_params["samplerate"], rec_params["blocksize"],
-                     sd.default.device)
+
+        in_name = DeviceManager.get_device_name(rec_params["device"] or sd.default.device[0])
+        out_name = DeviceManager.get_device_name(ply_params["device"] or sd.default.device[1])
+        logger.info("音频流已启动 | 采样率 {} | 块大小 {}", rec_params["samplerate"], rec_params["blocksize"])
+        logger.info("  输入设备: {}", in_name)
+        logger.info("  输出设备: {}", out_name)
 
     def stop(self) -> None:
         """停止并释放音频流。"""
