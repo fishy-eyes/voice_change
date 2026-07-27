@@ -1,0 +1,10 @@
+# Audio
+sounddevice
+numpy
+scipy
+
+# GUI
+PySide6
+
+# Utilities
+loguru
