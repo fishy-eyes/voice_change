@@ -12,6 +12,7 @@ from audio.recorder import AudioRecorder
 from audio.player import AudioPlayer
 from audio.stream import AudioStream
 from effects.manager import EffectManager
+from effects.gain import GainEffect
 
 _stop_event = threading.Event()
 
@@ -19,6 +20,14 @@ _stop_event = threading.Event()
 def _on_signal(sig, frame):
     logger.info("收到退出信号，正在停止...")
     _stop_event.set()
+
+
+def create_effect_manager() -> EffectManager:
+    """创建并配置效果管理器。"""
+    effect_manager = EffectManager()
+    gain = GainEffect(gain=2.0)
+    effect_manager.add(gain)
+    return effect_manager
 
 
 def main() -> None:
@@ -33,8 +42,7 @@ def main() -> None:
     recorder = AudioRecorder(device=input_idx)
     player = AudioPlayer(device=output_idx)
 
-    # 初始化音效链（当前为空，直通模式）
-    effect_manager = EffectManager()
+    effect_manager = create_effect_manager()
 
     stream = AudioStream(recorder, player, effect_manager=effect_manager)
     stream.start()
