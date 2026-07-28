@@ -53,21 +53,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    stream = AudioStream(recorder, player, effect_manager=effect_manager)
-
-    signal.signal(signal.SIGINT, _on_signal)
-    signal.signal(signal.SIGTERM, _on_signal)
-
-    stream.start()
-    logger.info("实时回环已启动，按 Ctrl+C 停止...")
-
-    try:
-        _stop_event.wait()
-    except KeyboardInterrupt:
-        logger.info("KeyboardInterrupt，正在停止...")
-
-    try:
-        stream.stop()
-    except Exception as e:
-        logger.warning("stop error: {}", e)
-    logger.info("已退出")
