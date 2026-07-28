@@ -2,3 +2,4 @@
 
 from effects.base import BaseEffect
 from effects.manager import EffectManager
+from effects.gain import GainEffect
