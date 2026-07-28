@@ -3,6 +3,7 @@
 import signal
 import sys
 import threading
+import time
 
 from utils.logger import setup_logger
 from loguru import logger
@@ -42,10 +43,10 @@ def main() -> None:
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 
-    # 带超时的循环等待，保证 Windows 上 Ctrl+C 可中断
+    # 等待退出信号，保证 Windows 上 Ctrl+C 可中断
     try:
-        while not _stop_event.wait(timeout=0.1):
-            pass
+        while not _stop_event.is_set():
+            time.sleep(0.1)
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt，正在停止...")
         _stop_event.set()
