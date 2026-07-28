@@ -42,10 +42,13 @@ def main() -> None:
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 
+    # 带超时的循环等待，保证 Windows 上 Ctrl+C 可中断
     try:
-        _stop_event.wait()
+        while not _stop_event.wait(timeout=0.1):
+            pass
     except KeyboardInterrupt:
-        pass
+        logger.info("KeyboardInterrupt，正在停止...")
+        _stop_event.set()
 
     stream.stop()
     logger.info("已退出")
