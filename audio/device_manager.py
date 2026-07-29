@@ -139,5 +139,35 @@ class DeviceManager:
             return "(未知设备 #%d)" % index
 
     @staticmethod
+    def find_virtual_output_device() -> Optional[int]:
+        """Find VB-CABLE virtual output device.
+
+        Scans the output device list for a device whose name contains one of the
+        known VB-CABLE output-side identifiers and returns its index, or None.
+        """
+        keywords = ("cable input", "vb-audio virtual cable")
+        for d in DeviceManager.list_output_devices():
+            if any(kw in d.name.lower() for kw in keywords):
+                logger.info("检测到VB-CABLE输出设备: [{}] {}", d.index, d.name)
+                return d.index
+        logger.info("未检测到VB-CABLE设备")
+        return None
+
+    @staticmethod
+    def find_virtual_input_device() -> Optional[int]:
+        """Find VB-CABLE virtual input device.
+
+        Scans the input device list for a device whose name contains one of the
+        known VB-CABLE input-side identifiers and returns its index, or None.
+        """
+        keywords = ("cable output", "vb-audio virtual cable")
+        for d in DeviceManager.list_input_devices():
+            if any(kw in d.name.lower() for kw in keywords):
+                logger.info("检测到VB-CABLE输入设备: [{}] {}", d.index, d.name)
+                return d.index
+        logger.info("未检测到VB-CABLE设备")
+        return None
+
+    @staticmethod
     def get_default_devices() -> tuple:
         return sd.default.device
