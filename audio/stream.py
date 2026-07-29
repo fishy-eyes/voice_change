@@ -3,6 +3,7 @@
 from typing import Callable, Optional
 
 import numpy as np
+import time
 import sounddevice as sd
 from loguru import logger
 
@@ -36,6 +37,10 @@ class AudioStream:
         self._process_func: Optional[ProcessFunc] = None
         self._stream: Optional[sd.Stream] = None
         self._callback_count: int = 0
+        # performance monitoring
+        self._last_proc_ms: float = 0.0
+        self._total_proc_ms: float = 0.0
+        self._max_proc_ms: float = 0.0
 
     # ------------------------------------------------------------------
     # effect manager
@@ -83,6 +88,7 @@ class AudioStream:
                 logger.debug("input RMS: {:.6f}  (count={})", in_rms, self._callback_count)
 
             # priority: effect_manager > process_func > passthrough
+            t0 = time.perf_counter()
             if self._effect_manager is not None and not self._effect_manager.is_empty:
                 try:
                     processed = self._effect_manager.process(indata, frames, time_info, status)
@@ -97,13 +103,32 @@ class AudioStream:
                     processed = indata
             else:
                 processed = indata
+            t1 = time.perf_counter()
 
             outdata[:] = processed
+
+            # update perf stats
+            proc_ms = (t1 - t0) * 1000.0
+            self._last_proc_ms = proc_ms
+            self._total_proc_ms += proc_ms
+            if proc_ms > self._max_proc_ms:
+                self._max_proc_ms = proc_ms
 
             # debug: log output volume periodically
             if self._callback_count % 400 == 1:
                 out_rms = float(np.sqrt(np.mean(outdata ** 2)))
                 logger.debug("output RMS: {:.6f}", out_rms)
+
+                count = self._callback_count
+                avg_ms = self._total_proc_ms / count
+                logger.info(
+                    "audio performance:\n"
+                    "  callback count: {}\n"
+                    "  processing avg: {:.3f} ms\n"
+                    "  processing max: {:.3f} ms\n"
+                    "  processing last: {:.3f} ms",
+                    count, avg_ms, self._max_proc_ms, self._last_proc_ms,
+                )
 
         in_dev = rec_params["device"]
         out_dev = ply_params["device"]
