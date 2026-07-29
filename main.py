@@ -13,7 +13,14 @@ from audio.player import AudioPlayer
 from audio.stream import AudioStream
 from effects.manager import EffectManager
 from effects.gain import GainEffect
-from config.settings import INPUT_DEVICE, OUTPUT_DEVICE, AUTO_SELECT_DEVICES, SHOW_DEVICE_LIST
+from effects.echo import EchoEffect
+from effects.robot import RobotEffect
+from config.settings import (
+    INPUT_DEVICE, OUTPUT_DEVICE, AUTO_SELECT_DEVICES, SHOW_DEVICE_LIST,
+    ENABLE_GAIN, GAIN_VALUE,
+    ENABLE_ECHO, ECHO_DELAY, ECHO_DECAY,
+    ENABLE_ROBOT, ROBOT_FREQUENCY,
+)
 
 _stop_event = threading.Event()
 
@@ -26,8 +33,12 @@ def _on_signal(sig, frame):
 def create_effect_manager() -> EffectManager:
     """创建并配置效果管理器。"""
     effect_manager = EffectManager()
-    gain = GainEffect(gain=2.0)
-    effect_manager.add(gain)
+    if ENABLE_GAIN:
+        effect_manager.add(GainEffect(gain=GAIN_VALUE))
+    if ENABLE_ECHO:
+        effect_manager.add(EchoEffect(delay=ECHO_DELAY, decay=ECHO_DECAY))
+    if ENABLE_ROBOT:
+        effect_manager.add(RobotEffect(frequency=ROBOT_FREQUENCY))
     return effect_manager
 
 

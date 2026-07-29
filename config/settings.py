@@ -16,3 +16,14 @@ INPUT_DEVICE: int | None = None            # 输入设备索引，None = 系统�
 OUTPUT_DEVICE: str = "VB-CABLE"            # 输出设备关键字，"VB-CABLE" = 自动查找
 SHOW_DEVICE_LIST: bool = False             # True = 启动时打印设备列表，False = 跳过
 AUTO_SELECT_DEVICES: bool = True           # True = 自动选设备，False = 手动选
+
+# ---- 效果器配置 ----
+ENABLE_GAIN: bool = True                   # 启用增益效果
+GAIN_VALUE: float = 2.0                    # 增益倍数
+
+ENABLE_ECHO: bool = False                  # 启用回声效果
+ECHO_DELAY: float = 0.3                    # 回声延迟 (秒)
+ECHO_DECAY: float = 0.4                    # 回声衰减系数
+
+ENABLE_ROBOT: bool = False                 # 启用机器人音效
+ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
