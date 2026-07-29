@@ -13,6 +13,7 @@ from audio.player import AudioPlayer
 from audio.stream import AudioStream
 from effects.manager import EffectManager
 from effects.gain import GainEffect
+from config.settings import INPUT_DEVICE, OUTPUT_DEVICE, AUTO_SELECT_DEVICES, SHOW_DEVICE_LIST
 
 _stop_event = threading.Event()
 
@@ -34,10 +35,25 @@ def main() -> None:
     """程序入口：选择设备并启动实时音频回环。"""
     setup_logger()
 
-    DeviceManager.print_devices()
+    if SHOW_DEVICE_LIST:
+        DeviceManager.print_devices()
 
-    input_idx = DeviceManager.select_input_device()
-    output_idx = DeviceManager.select_output_device()
+    if AUTO_SELECT_DEVICES:
+        if INPUT_DEVICE is not None:
+            input_idx = INPUT_DEVICE
+            logger.info("使用配置指定的输入设备: {}", input_idx)
+        else:
+            input_idx = None
+            logger.info("使用系统默认输入设备")
+        output_idx = DeviceManager.find_virtual_output_device()
+        if output_idx is not None:
+            logger.info("自动使用VB-CABLE输出设备")
+        else:
+            logger.warning("未检测到VB-CABLE设备，回退到手动选择")
+            output_idx = DeviceManager.select_output_device()
+    else:
+        input_idx = DeviceManager.select_input_device()
+        output_idx = DeviceManager.select_output_device()
 
     recorder = AudioRecorder(device=input_idx)
     player = AudioPlayer(device=output_idx)

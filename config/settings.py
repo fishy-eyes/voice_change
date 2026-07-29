@@ -10,3 +10,9 @@ LATENCY: str = "low"               # "low" 让 PortAudio 选设备最低延迟
 # ---- 应用 ----
 LOG_LEVEL: str = "DEBUG"
 APP_NAME: str = "Voice Changer"
+
+# ---- 设备配置 ----
+INPUT_DEVICE: int | None = None            # 输入设备索引，None = 系统默认
+OUTPUT_DEVICE: str = "VB-CABLE"            # 输出设备关键字，"VB-CABLE" = 自动查找
+SHOW_DEVICE_LIST: bool = False             # True = 启动时打印设备列表，False = 跳过
+AUTO_SELECT_DEVICES: bool = True           # True = 自动选设备，False = 手动选
