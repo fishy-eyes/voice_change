@@ -14,11 +14,14 @@ from effects.manager import EffectManager
 from effects.gain import GainEffect
 from effects.echo import EchoEffect
 from effects.robot import RobotEffect
+from effects.ai_voice import AIVoiceEffect
+from ai.rvc_engine import RVCEngine
 from config.settings import (
     INPUT_DEVICE, OUTPUT_DEVICE, AUTO_SELECT_DEVICES, SHOW_DEVICE_LIST,
     ENABLE_GAIN, GAIN_VALUE,
     ENABLE_ECHO, ECHO_DELAY, ECHO_DECAY,
     ENABLE_ROBOT, ROBOT_FREQUENCY,
+    ENABLE_AI_VOICE, RVC_MODEL_PATH,
 )
 from core.context import AppContext
 from gui.app import create_app
@@ -75,6 +78,10 @@ def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
 def create_effect_manager() -> EffectManager:
     """创建并配置效果管理器。"""
     effect_manager = EffectManager()
+    # AI Voice: placed first so downstream effects act on converted voice
+    if ENABLE_AI_VOICE:
+        rvc_engine = RVCEngine(model_path=RVC_MODEL_PATH)
+        effect_manager.add(AIVoiceEffect(engine=rvc_engine))
     if ENABLE_GAIN:
         effect_manager.add(GainEffect(gain=GAIN_VALUE))
     if ENABLE_ECHO:

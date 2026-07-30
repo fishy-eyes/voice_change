@@ -27,3 +27,8 @@ ECHO_DECAY: float = 0.4                    # 回声衰减系数
 
 ENABLE_ROBOT: bool = True                  # 启用机器人音效
 ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
+
+# ---- AI 变声 ----
+ENABLE_AI_VOICE: bool = True
+RVC_MODEL_PATH: str = "models/rvc.pth"
+RVC_PITCH_SHIFT: int = 0
