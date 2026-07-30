@@ -29,22 +29,13 @@ class MainWindow(QMainWindow):
 
         # --- Device Info ---
         device_group = QGroupBox("Device Info")
-        input_name = "System Default Mic"
-        output_name = "System Default Output"
-        if self._context:
-            dm = getattr(self._context, "device_manager", None)
-            if dm is not None:
-                try:
-                    input_name = dm.get_device_name(self._context.input_device)
-                    output_name = dm.get_device_name(self._context.output_device)
-                except Exception:
-                    pass
-        device_label = QLabel(
-            f"[Input] {input_name}  ·  [Output] {output_name}"
-        )
+        device_label = QLabel("Loading...")
         device_label.setStyleSheet("padding: 8px;")
         vg = QVBoxLayout(device_group)
         vg.addWidget(device_label)
+        refresh_device_btn = QPushButton("刷新设备")
+        refresh_device_btn.clicked.connect(self._update_device_display)
+        vg.addWidget(refresh_device_btn)
         layout.addWidget(device_group)
 
         # --- Effects Control ---
@@ -94,6 +85,7 @@ class MainWindow(QMainWindow):
 
         # populate from context if available
         self._update_effects_display()
+        self._update_device_display()
 
         # periodic status refresh
         self._status_timer = QTimer(self)
@@ -153,3 +145,17 @@ class MainWindow(QMainWindow):
         else:
             text = "Audio: Stopped"
         self._status_label.setText(text)
+
+    def _update_device_display(self) -> None:
+        """Refresh the device label from AppContext."""
+        dm = getattr(self._context, "device_manager", None) if self._context else None
+        if dm is None:
+            self._device_label.setText("Input: (N/A)\nOutput: (N/A)")
+            return
+        try:
+            input_name = dm.get_device_name(self._context.input_device)
+            output_name = dm.get_device_name(self._context.output_device)
+        except Exception:
+            input_name = "Unknown Device"
+            output_name = "Unknown Device"
+        self._device_label.setText(f"Input: {input_name}\nOutput: {output_name}")
