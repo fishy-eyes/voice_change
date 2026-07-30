@@ -123,7 +123,7 @@ def main() -> None:
     # build context and launch GUI
     context = AppContext(
         effect_manager=effect_manager,
-        device_manager=None,
+        device_manager=DeviceManager,
         audio_stream=stream,
     )
     app, _window = create_app(context)
