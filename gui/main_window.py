@@ -72,6 +72,14 @@ class MainWindow(QMainWindow):
         status_label.setStyleSheet("padding: 8px;")
         sg = QVBoxLayout(status_group)
         sg.addWidget(status_label)
+        btn_row = QHBoxLayout()
+        self._start_btn = QPushButton("启动音频")
+        self._start_btn.clicked.connect(self._start_audio)
+        self._stop_btn = QPushButton("停止音频")
+        self._stop_btn.clicked.connect(self._stop_audio)
+        btn_row.addWidget(self._start_btn)
+        btn_row.addWidget(self._stop_btn)
+        sg.addLayout(btn_row)
         layout.addWidget(status_group)
 
         layout.addStretch()
@@ -159,3 +167,26 @@ class MainWindow(QMainWindow):
             input_name = "Unknown Device"
             output_name = "Unknown Device"
         self._device_label.setText(f"Input: {input_name}\nOutput: {output_name}")
+        self._update_status_display()
+
+    def _start_audio(self) -> None:
+        """Start the audio stream via AppContext."""
+        stream = getattr(self._context, "audio_stream", None) if self._context else None
+        if stream is None:
+            return
+        if stream.is_running:
+            return
+        stream.start()
+        self._update_status_display()
+        self.statusBar().showMessage("Audio started")
+
+    def _stop_audio(self) -> None:
+        """Stop the audio stream via AppContext."""
+        stream = getattr(self._context, "audio_stream", None) if self._context else None
+        if stream is None:
+            return
+        if not stream.is_running:
+            return
+        stream.stop()
+        self._update_status_display()
+        self.statusBar().showMessage("Audio stopped")

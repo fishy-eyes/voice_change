@@ -114,8 +114,6 @@ def main() -> None:
     effect_manager = create_effect_manager()
 
     stream = AudioStream(recorder, player, effect_manager=effect_manager)
-    stream.start()
-    logger.info("实时回环已启动，按 Ctrl+C 停止...")
 
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
