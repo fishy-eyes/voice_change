@@ -30,13 +30,52 @@ def _on_signal(sig, frame):
     _stop_event.set()
 
 
+def _cli_loop(effect_manager: EffectManager) -> None:
+    """Background thread: read CLI commands (non-blocking to audio)."""
+    while not _stop_event.is_set():
+        try:
+            cmd = input("> ").strip().lower()
+        except EOFError:
+            break
+        if cmd == "exit":
+            logger.info("CLI: exit")
+            _stop_event.set()
+            break
+        elif cmd == "status":
+            for e in effect_manager.effects:
+                print(f"{e.name}: enabled={e.enabled}")
+        elif cmd == "robot on":
+            effect_manager.enable("RobotEffect")
+        elif cmd == "robot off":
+            effect_manager.disable("RobotEffect")
+        elif cmd == "echo on":
+            effect_manager.enable("EchoEffect")
+        elif cmd == "echo off":
+            effect_manager.disable("EchoEffect")
+        elif cmd.startswith("gain "):
+            effect = effect_manager.get_by_name("GainEffect")
+            if effect is None:
+                print("effect not found: GainEffect")
+            else:
+                try:
+                    value = float(cmd.split(" ", 1)[1])
+                    effect.gain = value
+                    print(f"gain set to {value}")
+                except ValueError:
+                    print("invalid gain value")
+        elif cmd == "":
+            continue
+        else:
+            print(f"unknown command: {cmd!r}  (type 'exit' to quit)")
+
+
 def create_effect_manager() -> EffectManager:
     """创建并配置效果管理器。"""
     effect_manager = EffectManager()
     if ENABLE_GAIN:
         effect_manager.add(GainEffect(gain=GAIN_VALUE))
     if ENABLE_ECHO:
-        effect_manager.add(EchoEffect(delay=ECHO_DELAY, decay=ECHO_DECAY))
+        effect_manager.add(EchoEffect(delay_ms=ECHO_DELAY, decay=ECHO_DECAY))
     if ENABLE_ROBOT:
         effect_manager.add(RobotEffect(frequency=ROBOT_FREQUENCY))
     return effect_manager
@@ -78,7 +117,10 @@ def main() -> None:
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 
-    # 等待退出信号，保证 Windows 上 Ctrl+C 可中断
+    # start CLI thread for runtime commands
+    cli_thread = threading.Thread(target=_cli_loop, args=(effect_manager,), daemon=True, name="cli")
+    cli_thread.start()
+
     try:
         while not _stop_event.is_set():
             time.sleep(0.1)
@@ -87,6 +129,7 @@ def main() -> None:
         _stop_event.set()
 
     stream.stop()
+    cli_thread.join(timeout=1.0)
     logger.info("已退出")
 
 

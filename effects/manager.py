@@ -73,6 +73,33 @@ class EffectManager:
     def __len__(self) -> int:
         return len(self._effects)
 
+    def get_by_name(self, name: str) -> Optional[BaseEffect]:
+        """Return the first effect matching *name*, or None."""
+        for e in self._effects:
+            if e.name == name:
+                return e
+        return None
+
+    def enable(self, name: str) -> bool:
+        """Enable the effect matching *name*. Returns True if found."""
+        effect = self.get_by_name(name)
+        if effect is None:
+            logger.warning("enable: effect not found: {}", name)
+            return False
+        effect.enabled = True
+        logger.info("effect enabled: {}", name)
+        return True
+
+    def disable(self, name: str) -> bool:
+        """Disable the effect matching *name*. Returns True if found."""
+        effect = self.get_by_name(name)
+        if effect is None:
+            logger.warning("disable: effect not found: {}", name)
+            return False
+        effect.enabled = False
+        logger.info("effect disabled: {}", name)
+        return True
+
     # ------------------------------------------------------------------
     # processing
     # ------------------------------------------------------------------
