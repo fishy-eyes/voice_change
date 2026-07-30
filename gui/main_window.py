@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QGroupBox, QLabel,
+    QPushButton,
 )
 
 if TYPE_CHECKING:
@@ -43,6 +44,9 @@ class MainWindow(QMainWindow):
         effects_label.setStyleSheet("padding: 8px;")
         eg = QVBoxLayout(effects_group)
         eg.addWidget(effects_label)
+        refresh_btn = QPushButton("刷新效果状态")
+        refresh_btn.clicked.connect(self._update_effects_display)
+        eg.addWidget(refresh_btn)
         layout.addWidget(effects_group)
 
         # --- Status ---
