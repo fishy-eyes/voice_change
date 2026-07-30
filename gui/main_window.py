@@ -1,15 +1,23 @@
 """Voice Changer main window."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QGroupBox, QLabel,
 )
+
+if TYPE_CHECKING:
+    from core.context import AppContext
 
 
 class MainWindow(QMainWindow):
     """Application main window with placeholder regions."""
 
-    def __init__(self) -> None:
+    def __init__(self, context: Optional[AppContext] = None) -> None:
         super().__init__()
+        self._context = context
         self.setWindowTitle("Voice Changer")
         self.resize(600, 450)
 
