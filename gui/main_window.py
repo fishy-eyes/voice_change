@@ -29,8 +29,18 @@ class MainWindow(QMainWindow):
 
         # --- Device Info ---
         device_group = QGroupBox("Device Info")
+        input_name = "System Default Mic"
+        output_name = "System Default Output"
+        if self._context:
+            dm = getattr(self._context, "device_manager", None)
+            if dm is not None:
+                try:
+                    input_name = dm.get_device_name(self._context.input_device)
+                    output_name = dm.get_device_name(self._context.output_device)
+                except Exception:
+                    pass
         device_label = QLabel(
-            "[Input] System Default Mic  ·  [Output] VB-CABLE"
+            f"[Input] {input_name}  ·  [Output] {output_name}"
         )
         device_label.setStyleSheet("padding: 8px;")
         vg = QVBoxLayout(device_group)
