@@ -22,7 +22,11 @@ class AppContext:
         effect_manager: Optional[EffectManager] = None,
         device_manager: Optional[DeviceManager] = None,
         audio_stream: Optional[AudioStream] = None,
+        input_device: Optional[int] = None,
+        output_device: Optional[int] = None,
     ) -> None:
         self.effect_manager = effect_manager
         self.device_manager = device_manager
         self.audio_stream = audio_stream
+        self.input_device = input_device
+        self.output_device = output_device

@@ -125,6 +125,8 @@ def main() -> None:
         effect_manager=effect_manager,
         device_manager=DeviceManager,
         audio_stream=stream,
+        input_device=input_idx,
+        output_device=output_idx,
     )
     app, _window = create_app(context)
 
