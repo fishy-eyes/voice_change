@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """全局配置"""
 
 # ---- 音频参数 ----
