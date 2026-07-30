@@ -63,3 +63,17 @@ class MainWindow(QMainWindow):
         self._status_label = status_label
 
         self.statusBar().showMessage("Ready")
+
+        # populate from context if available
+        self._update_effects_display()
+
+    def _update_effects_display(self) -> None:
+        """Refresh the effects label from AppContext.effect_manager."""
+        em = getattr(self._context, "effect_manager", None) if self._context else None
+        if em is None:
+            return
+        lines = []
+        for effect in em.effects:
+            state = "ON" if effect.enabled else "OFF"
+            lines.append(f"{effect.name}: {state}")
+        self._effects_label.setText("  \n".join(lines))
