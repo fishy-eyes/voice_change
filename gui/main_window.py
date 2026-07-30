@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QGroupBox, QLabel,
-    QPushButton,
+    QPushButton, QSlider, QHBoxLayout,
 )
+from PySide6.QtCore import Qt
 
 if TYPE_CHECKING:
     from core.context import AppContext
@@ -47,6 +48,19 @@ class MainWindow(QMainWindow):
         refresh_btn = QPushButton("刷新效果状态")
         refresh_btn.clicked.connect(self._update_effects_display)
         eg.addWidget(refresh_btn)
+        for name in ("RobotEffect", "EchoEffect", "GainEffect"):
+            btn = QPushButton(f"{name.replace('Effect', '')} 开关")
+            btn.clicked.connect(lambda checked=False, n=name: self._toggle_effect(n))
+            eg.addWidget(btn)
+        gain_row = QHBoxLayout()
+        self._gain_label = QLabel("Gain: 2.0")
+        gain_slider = QSlider(Qt.Horizontal)
+        gain_slider.setRange(10, 50)
+        gain_slider.setValue(20)
+        gain_slider.valueChanged.connect(self._on_gain_changed)
+        gain_row.addWidget(self._gain_label)
+        gain_row.addWidget(gain_slider)
+        eg.addLayout(gain_row)
         layout.addWidget(effects_group)
 
         # --- Status ---
@@ -81,3 +95,29 @@ class MainWindow(QMainWindow):
             state = "ON" if effect.enabled else "OFF"
             lines.append(f"{effect.name}: {state}")
         self._effects_label.setText("  \n".join(lines))
+
+    def _toggle_effect(self, effect_name: str) -> None:
+        """Toggle an effect on/off and refresh the display."""
+        em = getattr(self._context, "effect_manager", None) if self._context else None
+        if em is None:
+            return
+        effect = em.get_by_name(effect_name)
+        if effect is None:
+            return
+        if effect.enabled:
+            em.disable(effect_name)
+        else:
+            em.enable(effect_name)
+        self._update_effects_display()
+
+    def _on_gain_changed(self, value: int) -> None:
+        """Handle gain slider value change (integer 10-50 -> float 1.0-5.0)."""
+        em = getattr(self._context, "effect_manager", None) if self._context else None
+        if em is None:
+            return
+        effect = em.get_by_name("GainEffect")
+        if effect is None:
+            return
+        gain = value / 10.0
+        effect.gain = gain
+        self._gain_label.setText(f"Gain: {gain:.1f}")
