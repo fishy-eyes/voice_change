@@ -1,1 +1,1 @@
-"""图形界面模块"""
+"""Voice Changer GUI package."""
