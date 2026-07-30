@@ -21,9 +21,9 @@ AUTO_SELECT_DEVICES: bool = True           # True = 自动选设备，False = �
 ENABLE_GAIN: bool = True                   # 启用增益效果
 GAIN_VALUE: float = 2.0                    # 增益倍数
 
-ENABLE_ECHO: bool = False                  # 启用回声效果
+ENABLE_ECHO: bool = True                  # 启用回声效果
 ECHO_DELAY: float = 0.3                    # 回声延迟 (秒)
 ECHO_DECAY: float = 0.4                    # 回声衰减系数
 
-ENABLE_ROBOT: bool = False                 # 启用机器人音效
+ENABLE_ROBOT: bool = True                  # 启用机器人音效
 ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
