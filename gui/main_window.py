@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QGroupBox, QLabel,
     QPushButton, QSlider, QHBoxLayout,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 if TYPE_CHECKING:
     from core.context import AppContext
@@ -95,6 +95,11 @@ class MainWindow(QMainWindow):
         # populate from context if available
         self._update_effects_display()
 
+        # periodic status refresh
+        self._status_timer = QTimer(self)
+        self._status_timer.timeout.connect(self._update_status_display)
+        self._status_timer.start(500)
+
     def _update_effects_display(self) -> None:
         """Refresh the effects label from AppContext.effect_manager."""
         em = getattr(self._context, "effect_manager", None) if self._context else None
@@ -131,3 +136,20 @@ class MainWindow(QMainWindow):
         gain = value / 10.0
         effect.gain = gain
         self._gain_label.setText(f"Gain: {gain:.1f}")
+
+    def _update_status_display(self) -> None:
+        """Periodically refresh the status label from AudioStream."""
+        stream = getattr(self._context, "audio_stream", None) if self._context else None
+        if stream is None:
+            return
+        if stream.is_running:
+            count = stream._callback_count
+            avg = (stream._total_proc_ms / count) if count > 0 else 0.0
+            text = (
+                f"Audio: Running\n"
+                f"Processing avg: {avg:.2f} ms\n"
+                f"Processing max: {stream._max_proc_ms:.2f} ms"
+            )
+        else:
+            text = "Audio: Stopped"
+        self._status_label.setText(text)
