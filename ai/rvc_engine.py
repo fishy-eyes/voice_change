@@ -305,6 +305,16 @@ class RVCEngine:
         if not self._model_loaded:
             raise RuntimeError("RVCEngine: model not loaded, call load_model() first")
 
+        # --- Input audio type normalization ---
+        if not isinstance(audio, np.ndarray):
+            audio = np.asarray(audio)
+        if audio.dtype == np.int16:
+            audio = audio.astype(np.float32) / 32768.0
+        elif audio.dtype == np.int32:
+            audio = audio.astype(np.float32) / 2147483648.0
+        elif audio.dtype != np.float32:
+            audio = audio.astype(np.float32)
+
         import librosa
 
         original_len = len(audio)
@@ -346,6 +356,14 @@ class RVCEngine:
         except Exception as e:
             logger.error("RVCEngine: inference failed: {}", e)
             return audio.copy()
+
+        # --- Pipeline output type normalization ---
+        if audio_opt.dtype == np.int16:
+            audio_opt = audio_opt.astype(np.float32) / 32768.0
+        elif audio_opt.dtype == np.int32:
+            audio_opt = audio_opt.astype(np.float32) / 2147483648.0
+        elif audio_opt.dtype != np.float32:
+            audio_opt = audio_opt.astype(np.float32)
 
         # 4. Resample from tgt_sr back to project SR
         if self._tgt_sr != self._sample_rate:
