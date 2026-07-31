@@ -15,6 +15,7 @@ import os
 import sys
 import gc
 from pathlib import Path
+from time import perf_counter as _perf_counter
 
 import numpy as np
 from loguru import logger
@@ -305,7 +306,10 @@ class RVCEngine:
         if not self._model_loaded:
             raise RuntimeError("RVCEngine: model not loaded, call load_model() first")
 
-        # --- Input audio type normalization ---
+        _t_total = _perf_counter()
+
+        # --- Stage 1: Input preprocessing ---
+        _t0 = _perf_counter()
         if not isinstance(audio, np.ndarray):
             audio = np.asarray(audio)
         if audio.dtype == np.int16:
@@ -318,8 +322,6 @@ class RVCEngine:
         import librosa
 
         original_len = len(audio)
-
-        # 1. Resample from project SR to 16000 Hz (HuBERT input SR)
         hubert_sr = 16000
         if self._sample_rate != hubert_sr:
             audio_16k = librosa.resample(
@@ -327,13 +329,13 @@ class RVCEngine:
             )
         else:
             audio_16k = audio.copy()
-
-        # 2. Normalize (match test_infer.py behaviour)
         audio_max = np.abs(audio_16k).max() / 0.95
         if audio_max > 1:
             audio_16k /= audio_max
+        _t_pre = _perf_counter() - _t0
 
-        # 3. Run RVC pipeline
+        # --- Stage 2: RVC Pipeline ---
+        _t0 = _perf_counter()
         times = [0.0, 0.0, 0.0]
         try:
             audio_opt = self._pipeline.pipeline(
@@ -356,8 +358,10 @@ class RVCEngine:
         except Exception as e:
             logger.error("RVCEngine: inference failed: {}", e)
             return audio.copy()
+        _t_pipe = _perf_counter() - _t0
 
-        # --- Pipeline output type normalization ---
+        # --- Stage 3: Output postprocessing ---
+        _t0 = _perf_counter()
         if audio_opt.dtype == np.int16:
             audio_opt = audio_opt.astype(np.float32) / 32768.0
         elif audio_opt.dtype == np.int32:
@@ -365,7 +369,6 @@ class RVCEngine:
         elif audio_opt.dtype != np.float32:
             audio_opt = audio_opt.astype(np.float32)
 
-        # 4. Resample from tgt_sr back to project SR
         if self._tgt_sr != self._sample_rate:
             audio_out = librosa.resample(
                 audio_opt, orig_sr=self._tgt_sr, target_sr=self._sample_rate,
@@ -373,7 +376,6 @@ class RVCEngine:
         else:
             audio_out = audio_opt
 
-        # 5. Match original length
         if len(audio_out) != original_len:
             if len(audio_out) > original_len:
                 audio_out = audio_out[:original_len]
@@ -381,6 +383,17 @@ class RVCEngine:
                 audio_out = np.pad(
                     audio_out, (0, original_len - len(audio_out)),
                 )
+        _t_post = _perf_counter() - _t0
+
+        _t_total = _perf_counter() - _t_total
+        logger.debug(
+            "infer: pre={:.1f}ms pipe={:.1f}ms post={:.1f}ms total={:.1f}ms",
+            _t_pre * 1000, _t_pipe * 1000, _t_post * 1000, _t_total * 1000,
+        )
+        logger.debug(
+            "  pipeline breakdown: HuBERT={:.1f}ms F0={:.1f}ms Index+Synth={:.1f}ms",
+            times[0] * 1000, times[1] * 1000, times[2] * 1000,
+        )
 
         return audio_out.astype(np.float32)
 
