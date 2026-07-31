@@ -32,6 +32,11 @@ ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
 
 # ---- AI 变声 ----
 ENABLE_AI_VOICE: bool = True
+RVC_CHUNK_SIZE: int = SAMPLE_RATE
+RVC_INPUT_QUEUE_SIZE: int = 2
+RVC_WARMUP_ENABLED: bool = True
+RVC_WARMUP_TIMEOUT: float = 120.0
+RVC_WORKER_STOP_TIMEOUT: float = 5.0
 RVC_PITCH_SHIFT: int = 0
 RVC_F0_METHOD: str = "rmvpe"         # f0 estimation method
 RVC_INDEX_RATE: float = 0.75         # index matching rate (0.0 - 1.0)

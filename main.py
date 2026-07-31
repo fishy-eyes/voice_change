@@ -1,44 +1,61 @@
-"""Voice Changer - Windows 实时变声器"""
+"""Voice Changer application entry point."""
+
+from __future__ import annotations
 
 import signal
-import sys
 import threading
+from typing import Callable, Optional
 
-from utils.logger import setup_logger
 from loguru import logger
+
 from audio.device_manager import DeviceManager
-from audio.recorder import AudioRecorder
 from audio.player import AudioPlayer
+from audio.recorder import AudioRecorder
 from audio.stream import AudioStream
-from effects.manager import EffectManager
-from effects.gain import GainEffect
-from effects.echo import EchoEffect
-from effects.robot import RobotEffect
-from effects.ai_voice import AIVoiceEffect
-from ai.rvc_engine import RVCEngine
 from config.settings import (
-    INPUT_DEVICE, OUTPUT_DEVICE, AUTO_SELECT_DEVICES, SHOW_DEVICE_LIST,
-    ENABLE_GAIN, GAIN_VALUE,
-    ENABLE_ECHO, ECHO_DELAY, ECHO_DECAY,
-    ENABLE_ROBOT, ROBOT_FREQUENCY,
+    AUTO_SELECT_DEVICES,
+    ECHO_DECAY,
+    ECHO_DELAY,
     ENABLE_AI_VOICE,
-    RVC_SOURCE_DIR, RVC_MODELS_DIR, RVC_VOICE_DIR,
-    RVC_PITCH_SHIFT, RVC_F0_METHOD, RVC_INDEX_RATE,
-    RVC_RMS_MIX_RATE, RVC_PROTECT,
+    ENABLE_ECHO,
+    ENABLE_GAIN,
+    ENABLE_ROBOT,
+    GAIN_VALUE,
+    INPUT_DEVICE,
+    ROBOT_FREQUENCY,
+    RVC_WORKER_STOP_TIMEOUT,
+    SHOW_DEVICE_LIST,
 )
 from core.context import AppContext
+from core.rvc_lifecycle import (
+    RVCApplicationState,
+    cleanup_rvc_application,
+    initialize_rvc_application,
+)
+from effects.ai_voice import AIVoiceEffect
+from effects.echo import EchoEffect
+from effects.gain import GainEffect
+from effects.manager import EffectManager
+from effects.robot import RobotEffect
 from gui.app import create_app
+from utils.logger import setup_logger
 
 _stop_event = threading.Event()
+_quit_callback: Optional[Callable[[], None]] = None
 
 
-def _on_signal(sig, frame):
-    logger.info("收到退出信号，正在停止...")
+def _on_signal(sig, frame) -> None:
+    """Route Ctrl+C/termination through the same Qt/finally cleanup path."""
+    del frame
+    logger.info("received signal {}; shutting down", sig)
     _stop_event.set()
+    callback = _quit_callback
+    if callback is not None:
+        callback()
 
 
 def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
-    """Background thread: read CLI commands (non-blocking to audio)."""
+    """Background thread: read CLI commands without blocking audio."""
     while not _stop_event.is_set():
         try:
             cmd = input("> ").strip().lower()
@@ -50,9 +67,9 @@ def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
             if quit_fn:
                 quit_fn()
             break
-        elif cmd == "status":
-            for e in effect_manager.effects:
-                print(f"{e.name}: enabled={e.enabled}")
+        if cmd == "status":
+            for effect in effect_manager.effects:
+                print(f"{effect.name}: enabled={effect.enabled}")
         elif cmd == "robot on":
             effect_manager.enable("RobotEffect")
         elif cmd == "robot off":
@@ -72,28 +89,17 @@ def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
                     print(f"gain set to {value}")
                 except ValueError:
                     print("invalid gain value")
-        elif cmd == "":
-            continue
-        else:
+        elif cmd:
             print(f"unknown command: {cmd!r}  (type 'exit' to quit)")
 
 
-def create_effect_manager() -> EffectManager:
-    """创建并配置效果管理器。"""
+def create_effect_manager(
+    ai_voice_effect: Optional[AIVoiceEffect] = None,
+) -> EffectManager:
+    """Build the established effect chain, with ready AI first when present."""
     effect_manager = EffectManager()
-    # AI Voice: placed first so downstream effects act on converted voice
-    if ENABLE_AI_VOICE:
-        rvc_engine = RVCEngine(
-            voice_dir=RVC_VOICE_DIR,
-            source_dir=RVC_SOURCE_DIR,
-            models_dir=RVC_MODELS_DIR,
-            pitch_shift=RVC_PITCH_SHIFT,
-            f0_method=RVC_F0_METHOD,
-            index_rate=RVC_INDEX_RATE,
-            rms_mix_rate=RVC_RMS_MIX_RATE,
-            protect=RVC_PROTECT,
-        )
-        effect_manager.add(AIVoiceEffect(engine=rvc_engine))
+    if ai_voice_effect is not None:
+        effect_manager.add(ai_voice_effect)
     if ENABLE_GAIN:
         effect_manager.add(GainEffect(gain=GAIN_VALUE))
     if ENABLE_ECHO:
@@ -103,62 +109,103 @@ def create_effect_manager() -> EffectManager:
     return effect_manager
 
 
-def main() -> None:
-    """程序入口：选择设备并启动实时音频回环。"""
-    setup_logger()
-
+def _select_devices() -> tuple[Optional[int], Optional[int]]:
     if SHOW_DEVICE_LIST:
         DeviceManager.print_devices()
 
     if AUTO_SELECT_DEVICES:
         if INPUT_DEVICE is not None:
             input_idx = INPUT_DEVICE
-            logger.info("使用配置指定的输入设备: {}", input_idx)
+            logger.info("using configured input device {}", input_idx)
         else:
             input_idx = None
-            logger.info("使用系统默认输入设备")
+            logger.info("using system default input device")
         output_idx = DeviceManager.find_virtual_output_device()
         if output_idx is not None:
-            logger.info("自动使用VB-CABLE输出设备")
+            logger.info("using detected VB-CABLE output")
         else:
-            logger.warning("未检测到VB-CABLE设备，回退到手动选择")
+            logger.warning("VB-CABLE not found; falling back to output selection")
             output_idx = DeviceManager.select_output_device()
     else:
         input_idx = DeviceManager.select_input_device()
         output_idx = DeviceManager.select_output_device()
+    return input_idx, output_idx
 
-    recorder = AudioRecorder(device=input_idx)
-    player = AudioPlayer(device=output_idx)
 
-    effect_manager = create_effect_manager()
+def main() -> None:
+    """Initialize RVC before exposing AudioStream, then clean up in order."""
+    global _quit_callback
 
-    stream = AudioStream(recorder, player, effect_manager=effect_manager)
-
+    setup_logger()
+    _stop_event.clear()
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 
-    # build context and launch GUI
-    context = AppContext(
-        effect_manager=effect_manager,
-        device_manager=DeviceManager,
-        audio_stream=stream,
-        input_device=input_idx,
-        output_device=output_idx,
-    )
-    app, _window = create_app(context)
-
-    # start CLI thread for runtime commands
-    cli_thread = threading.Thread(target=_cli_loop, args=(effect_manager, app.quit), daemon=True, name="cli")
-    cli_thread.start()
+    rvc_state = RVCApplicationState(enabled=ENABLE_AI_VOICE)
+    stream: Optional[AudioStream] = None
+    cli_thread: Optional[threading.Thread] = None
 
     try:
+        input_idx, output_idx = _select_devices()
+        recorder = AudioRecorder(device=input_idx)
+        player = AudioPlayer(device=output_idx)
+
+        # Required order: model load -> Worker start -> warmup -> effect chain.
+        rvc_state = initialize_rvc_application(enabled=ENABLE_AI_VOICE)
+        if _stop_event.is_set():
+            logger.info("shutdown requested during initialization")
+            return
+
+        ai_effect = rvc_state.effect if rvc_state.ready else None
+        effect_manager = create_effect_manager(ai_effect)
+
+        # AudioStream is only created after AI is ready or has safely fallen
+        # back to the base effect chain. The GUI may start it later.
+        stream = AudioStream(recorder, player, effect_manager=effect_manager)
+        context = AppContext(
+            effect_manager=effect_manager,
+            device_manager=DeviceManager,
+            audio_stream=stream,
+            input_device=input_idx,
+            output_device=output_idx,
+        )
+        app, _window = create_app(context)
+        _quit_callback = app.quit
+
+        cli_thread = threading.Thread(
+            target=_cli_loop,
+            args=(effect_manager, app.quit),
+            daemon=True,
+            name="cli",
+        )
+        cli_thread.start()
         app.exec()
     except KeyboardInterrupt:
-        logger.info("KeyboardInterrupt，正在停止...")
+        logger.info("KeyboardInterrupt; shutting down")
+    except Exception:
+        logger.exception("application startup/runtime failed")
     finally:
         _stop_event.set()
-        stream.stop()
-        cli_thread.join(timeout=1.0)
+        _quit_callback = None
+
+        # Ownership order: AudioStream -> Effect/Worker -> Engine.
+        if stream is not None:
+            try:
+                stream.stop()
+            except Exception as exc:
+                logger.error("AudioStream stop failed: {}", exc)
+
+        cleaned = cleanup_rvc_application(
+            rvc_state,
+            timeout=RVC_WORKER_STOP_TIMEOUT,
+        )
+        if not cleaned:
+            logger.warning(
+                "RVC cleanup incomplete; live Worker retained its loaded engine"
+            )
+
+        if cli_thread is not None:
+            cli_thread.join(timeout=1.0)
 
 
 if __name__ == "__main__":

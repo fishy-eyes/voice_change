@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 import threading
+from time import perf_counter
 from typing import TYPE_CHECKING, Deque
 
 import numpy as np
@@ -57,6 +58,7 @@ class AIVoiceEffect(BaseEffect):
         self._output_size = 0
 
         self._started = False
+        self._last_warmup_ms = 0.0
         # process() only attempts this lock; it never waits for lifecycle work.
         self._state_lock = threading.Lock()
         logger.debug("AIVoiceEffect created with engine: {}", engine)
@@ -83,6 +85,10 @@ class AIVoiceEffect(BaseEffect):
     def output_buffered_samples(self) -> int:
         return self._output_size
 
+    @property
+    def last_warmup_ms(self) -> float:
+        return self._last_warmup_ms
+
     def start(self) -> bool:
         """Clear stale audio and start the worker if the model is loaded."""
         with self._state_lock:
@@ -95,6 +101,71 @@ class AIVoiceEffect(BaseEffect):
                 return False
             self._started = self._worker.start()
             return self._started
+
+    def warmup(self, timeout: float = 120.0) -> bool:
+        """Warm up RVC through the Worker without exposing audio to playback.
+
+        This method is intentionally blocking and must run before AudioStream
+        starts. ``process()`` remains non-blocking if called concurrently.
+        """
+        if timeout <= 0:
+            logger.error("AIVoiceEffect: warmup timeout must be positive")
+            return False
+
+        with self._state_lock:
+            if not self._engine.is_loaded or not self.is_running:
+                logger.error("AIVoiceEffect: warmup requires a loaded, running effect")
+                return False
+            if self._worker.is_inferencing:
+                logger.error("AIVoiceEffect: warmup refused while inference is active")
+                return False
+
+            self._reset_buffers()
+            self._worker.clear_queues()
+            sample_rate = int(getattr(self._engine, "sample_rate", 44100))
+            timeline = np.arange(self._chunk_size, dtype=np.float32) / sample_rate
+            warmup_audio = (
+                0.05 * np.sin(2.0 * np.pi * 220.0 * timeline)
+            ).astype(np.float32)
+            started_at = perf_counter()
+
+            try:
+                if not self._worker.put(warmup_audio, timeout=0.0):
+                    logger.error("AIVoiceEffect: warmup submission failed")
+                    return False
+                result = self._worker.get(timeout=timeout)
+                if result is None:
+                    logger.error(
+                        "AIVoiceEffect: warmup produced no result within {:.3f}s",
+                        timeout,
+                    )
+                    return False
+                result = np.asarray(result)
+                if (
+                    result.shape != warmup_audio.shape
+                    or result.dtype != np.float32
+                    or not np.all(np.isfinite(result))
+                ):
+                    logger.error(
+                        "AIVoiceEffect: invalid warmup output shape={} dtype={}",
+                        result.shape,
+                        result.dtype,
+                    )
+                    return False
+                logger.info(
+                    "AIVoiceEffect: warmup completed in {:.1f}ms",
+                    (perf_counter() - started_at) * 1000.0,
+                )
+                return True
+            except Exception as exc:
+                logger.error("AIVoiceEffect: warmup failed: {}", exc)
+                return False
+            finally:
+                self._last_warmup_ms = (perf_counter() - started_at) * 1000.0
+                # The warmup result is consumed directly and no warmup or stale
+                # callback audio may enter normal playback.
+                self._worker.clear_queues()
+                self._reset_buffers()
 
     def stop(self, timeout: float = 5.0) -> bool:
         """Stop the worker without unloading its externally owned engine."""
