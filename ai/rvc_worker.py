@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import threading
 import queue
+from time import perf_counter
 from typing import Optional
 
 import numpy as np
@@ -71,8 +72,13 @@ class RVCWorker:
 
         self._thread: Optional[threading.Thread] = None
         self._running = threading.Event()
+        self._inferencing = threading.Event()
         self._infer_count: int = 0
         self._error_count: int = 0
+        self._input_drop_count: int = 0
+        self._output_drop_count: int = 0
+        self._last_infer_ms: float = 0.0
+        self._average_infer_ms: float = 0.0
 
     # ------------------------------------------------------------------
     # properties
@@ -102,12 +108,43 @@ class RVCWorker:
         return self._output_q.qsize()
 
     @property
+    def input_queue_size(self) -> int:
+        """Current number of queued input chunks."""
+        return self._input_q.qsize()
+
+    @property
+    def output_queue_size(self) -> int:
+        """Current number of queued output chunks."""
+        return self._output_q.qsize()
+
+    @property
+    def is_inferencing(self) -> bool:
+        """Whether the worker thread is currently inside engine.infer()."""
+        return self._inferencing.is_set()
+
+    @property
     def infer_count(self) -> int:
         return self._infer_count
 
     @property
     def error_count(self) -> int:
         return self._error_count
+
+    @property
+    def input_drop_count(self) -> int:
+        return self._input_drop_count
+
+    @property
+    def output_drop_count(self) -> int:
+        return self._output_drop_count
+
+    @property
+    def last_infer_ms(self) -> float:
+        return self._last_infer_ms
+
+    @property
+    def average_infer_ms(self) -> float:
+        return self._average_infer_ms
 
     # ------------------------------------------------------------------
     # lifecycle
@@ -192,6 +229,7 @@ class RVCWorker:
             # Drop oldest and enqueue new
             try:
                 self._input_q.get_nowait()
+                self._input_drop_count += 1
             except queue.Empty:
                 pass
             try:
@@ -249,12 +287,21 @@ class RVCWorker:
                 continue
 
             try:
+                self._inferencing.set()
+                infer_started = perf_counter()
                 result = self._engine.infer(audio)
                 self._infer_count += 1
+                infer_ms = (perf_counter() - infer_started) * 1000.0
+                self._last_infer_ms = infer_ms
+                self._average_infer_ms += (
+                    infer_ms - self._average_infer_ms
+                ) / self._infer_count
             except Exception as e:
                 logger.error("RVCWorker: infer failed: {}", e)
                 self._error_count += 1
                 result = None
+            finally:
+                self._inferencing.clear()
 
             # Enqueue result, drop oldest if full
             try:
@@ -262,6 +309,7 @@ class RVCWorker:
             except queue.Full:
                 try:
                     self._output_q.get_nowait()
+                    self._output_drop_count += 1
                 except queue.Empty:
                     pass
                 try:
