@@ -1,11 +1,37 @@
+# Python cache
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
+.pytest_cache/
+
+# Virtual environments
 .venv/
 venv/
+
+# Build
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Audio files
 *.wav
 *.mp3
-.idea/
-.vscode/
+*.m4a
+
+# RVC model files
+*.pth
+*.pt
+*.index
+*.bin
+*.safetensors
+
+# Generated outputs
+output/
+outputs/
