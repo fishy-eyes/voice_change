@@ -21,7 +21,10 @@ from config.settings import (
     ENABLE_GAIN, GAIN_VALUE,
     ENABLE_ECHO, ECHO_DELAY, ECHO_DECAY,
     ENABLE_ROBOT, ROBOT_FREQUENCY,
-    ENABLE_AI_VOICE, RVC_MODEL_PATH,
+    ENABLE_AI_VOICE,
+    RVC_SOURCE_DIR, RVC_MODELS_DIR, RVC_VOICE_DIR,
+    RVC_PITCH_SHIFT, RVC_F0_METHOD, RVC_INDEX_RATE,
+    RVC_RMS_MIX_RATE, RVC_PROTECT,
 )
 from core.context import AppContext
 from gui.app import create_app
@@ -80,7 +83,16 @@ def create_effect_manager() -> EffectManager:
     effect_manager = EffectManager()
     # AI Voice: placed first so downstream effects act on converted voice
     if ENABLE_AI_VOICE:
-        rvc_engine = RVCEngine(model_path=RVC_MODEL_PATH)
+        rvc_engine = RVCEngine(
+            voice_dir=RVC_VOICE_DIR,
+            source_dir=RVC_SOURCE_DIR,
+            models_dir=RVC_MODELS_DIR,
+            pitch_shift=RVC_PITCH_SHIFT,
+            f0_method=RVC_F0_METHOD,
+            index_rate=RVC_INDEX_RATE,
+            rms_mix_rate=RVC_RMS_MIX_RATE,
+            protect=RVC_PROTECT,
+        )
         effect_manager.add(AIVoiceEffect(engine=rvc_engine))
     if ENABLE_GAIN:
         effect_manager.add(GainEffect(gain=GAIN_VALUE))

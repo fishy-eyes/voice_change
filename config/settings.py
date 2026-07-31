@@ -32,5 +32,15 @@ ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
 
 # ---- AI 变声 ----
 ENABLE_AI_VOICE: bool = True
-RVC_MODEL_PATH: str = "models/rvc.pth"
 RVC_PITCH_SHIFT: int = 0
+RVC_F0_METHOD: str = "rmvpe"         # f0 estimation method
+RVC_INDEX_RATE: float = 0.75         # index matching rate (0.0 - 1.0)
+RVC_RMS_MIX_RATE: float = 0.25       # RMS envelope mix rate
+RVC_PROTECT: float = 0.33            # consonant protection (0.0 - 0.5)
+
+# RVC source code root (independent, managed separately)
+RVC_SOURCE_DIR: str = r"D:\Project_all\rvc_core_test\rvc_source"
+# RVC models root (hubert, rmvpe, voices)
+RVC_MODELS_DIR: str = r"D:\Project_all\rvc_core_test\models"
+# RVC voice directory (contains .pth + .index files)
+RVC_VOICE_DIR: str = r"D:\Project_all\rvc_core_test\models\voices"
