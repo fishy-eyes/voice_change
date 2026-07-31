@@ -27,6 +27,7 @@ from config.settings import (
     SHOW_DEVICE_LIST,
 )
 from core.context import AppContext
+from core.device_switching import stop_current_audio_stream
 from core.rvc_lifecycle import (
     RVCApplicationState,
     cleanup_rvc_application,
@@ -95,17 +96,31 @@ def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
 
 def create_effect_manager(
     ai_voice_effect: Optional[AIVoiceEffect] = None,
+    *,
+    gain_enabled: bool = ENABLE_GAIN,
+    echo_enabled: bool = ENABLE_ECHO,
+    robot_enabled: bool = ENABLE_ROBOT,
 ) -> EffectManager:
-    """Build the established effect chain, with ready AI first when present."""
+    """Build the established effect chain, with ready AI first when present.
+
+    Base effects are always registered so runtime controls can enable them.
+    Configuration only determines their initial enabled state.
+    """
     effect_manager = EffectManager()
     if ai_voice_effect is not None:
         effect_manager.add(ai_voice_effect)
-    if ENABLE_GAIN:
-        effect_manager.add(GainEffect(gain=GAIN_VALUE))
-    if ENABLE_ECHO:
-        effect_manager.add(EchoEffect(delay_ms=ECHO_DELAY, decay=ECHO_DECAY))
-    if ENABLE_ROBOT:
-        effect_manager.add(RobotEffect(frequency=ROBOT_FREQUENCY))
+
+    gain = GainEffect(gain=GAIN_VALUE)
+    gain.enabled = gain_enabled
+    effect_manager.add(gain)
+
+    echo = EchoEffect(delay_ms=ECHO_DELAY, decay=ECHO_DECAY)
+    echo.enabled = echo_enabled
+    effect_manager.add(echo)
+
+    robot = RobotEffect(frequency=ROBOT_FREQUENCY)
+    robot.enabled = robot_enabled
+    effect_manager.add(robot)
     return effect_manager
 
 
@@ -143,6 +158,7 @@ def main() -> None:
 
     rvc_state = RVCApplicationState(enabled=ENABLE_AI_VOICE)
     stream: Optional[AudioStream] = None
+    context: Optional[AppContext] = None
     cli_thread: Optional[threading.Thread] = None
 
     try:
@@ -189,11 +205,8 @@ def main() -> None:
         _quit_callback = None
 
         # Ownership order: AudioStream -> Effect/Worker -> Engine.
-        if stream is not None:
-            try:
-                stream.stop()
-            except Exception as exc:
-                logger.error("AudioStream stop failed: {}", exc)
+        stop_current_audio_stream(context, fallback=stream)
+
 
         cleaned = cleanup_rvc_application(
             rvc_state,
