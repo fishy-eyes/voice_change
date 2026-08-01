@@ -8,17 +8,20 @@ from loguru import logger
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
 
 from core.device_switching import switch_audio_devices
+from gui.i18n import tr
 from gui.rvc_control_panel import RVCControlPanel
 from gui.self_monitor_panel import SelfMonitorPanel
 
@@ -32,147 +35,249 @@ class MainWindow(QMainWindow):
     def __init__(self, context: Optional[AppContext] = None) -> None:
         super().__init__()
         self._context = context
-        self.setWindowTitle("Voice Changer")
-        self.resize(640, 1000)
+        self._language = "en"
+        self.setMinimumSize(1020, 640)
+        self.resize(1180, 760)
+        self.setStyleSheet(
+            """
+            QMainWindow { background: #f4f6fa; }
+            QWidget { font-family: "Segoe UI", "Microsoft YaHei UI", Arial; }
+            QGroupBox {
+                background: #ffffff;
+                border: 1px solid #dfe4ec;
+                border-radius: 9px;
+                margin-top: 12px;
+                padding: 10px;
+                font-weight: 600;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 5px;
+            }
+            QPushButton {
+                min-height: 28px;
+                padding: 2px 10px;
+                border: 1px solid #c9d1dc;
+                border-radius: 6px;
+                background: #ffffff;
+            }
+            QPushButton:hover { background: #eef4ff; border-color: #7ca7ee; }
+            QPushButton:pressed { background: #dce9ff; }
+            QComboBox {
+                min-height: 27px;
+                padding: 1px 7px;
+                border: 1px solid #c9d1dc;
+                border-radius: 5px;
+                background: #ffffff;
+            }
+            QLabel#secondaryText { color: #657084; font-size: 11px; }
+            QLabel#appTitle { color: #172033; font-size: 22px; font-weight: 700; }
+            """
+        )
 
         central = QWidget()
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        root_layout = QVBoxLayout(central)
+        root_layout.setContentsMargins(18, 14, 18, 12)
+        root_layout.setSpacing(10)
 
-        # --- Device selection ---
-        device_group = QGroupBox("Device Selection")
-        device_layout = QVBoxLayout(device_group)
-        self._device_label = QLabel("Loading...")
-        self._device_label.setStyleSheet("padding: 8px;")
+        header = QHBoxLayout()
+        self._app_title_label = QLabel()
+        self._app_title_label.setObjectName("appTitle")
+        header.addWidget(self._app_title_label)
+        header.addStretch()
+        self._language_caption_label = QLabel()
+        header.addWidget(self._language_caption_label)
+        self._language_button = QPushButton()
+        self._language_button.setMinimumWidth(88)
+        self._language_button.clicked.connect(self._toggle_language)
+        header.addWidget(self._language_button)
+        root_layout.addLayout(header)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        root_layout.addWidget(scroll_area, 1)
+
+        content = QWidget()
+        scroll_area.setWidget(content)
+        self._content_layout = QHBoxLayout(content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(16)
+
+        self._left_column = QWidget()
+        left_layout = QVBoxLayout(self._left_column)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
+        self._right_column = QWidget()
+        right_layout = QVBoxLayout(self._right_column)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
+        self._content_layout.addWidget(self._left_column, 1)
+        self._content_layout.addWidget(self._right_column, 1)
+
+        # --- Left column: devices, basic effects, local monitoring ---
+        self._device_group = QGroupBox()
+        device_layout = QVBoxLayout(self._device_group)
+        self._device_label = QLabel()
+        self._device_label.setWordWrap(True)
+        self._device_label.setStyleSheet("padding: 5px;")
         device_layout.addWidget(self._device_label)
 
         input_row = QHBoxLayout()
-        input_row.addWidget(QLabel("Input:"))
+        self._input_title_label = QLabel()
+        input_row.addWidget(self._input_title_label)
         self._input_combo = QComboBox()
-        input_row.addWidget(self._input_combo)
+        input_row.addWidget(self._input_combo, 1)
         device_layout.addLayout(input_row)
 
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("Output:"))
+        self._output_title_label = QLabel()
+        output_row.addWidget(self._output_title_label)
         self._output_combo = QComboBox()
-        output_row.addWidget(self._output_combo)
+        output_row.addWidget(self._output_combo, 1)
         device_layout.addLayout(output_row)
 
         device_buttons = QHBoxLayout()
-        refresh_device_btn = QPushButton("Refresh Devices")
-        refresh_device_btn.clicked.connect(self._refresh_device_choices)
-        apply_device_btn = QPushButton("Apply Devices")
-        apply_device_btn.clicked.connect(self._apply_devices)
-        device_buttons.addWidget(refresh_device_btn)
-        device_buttons.addWidget(apply_device_btn)
+        self._refresh_device_btn = QPushButton()
+        self._refresh_device_btn.clicked.connect(self._refresh_device_choices)
+        self._apply_device_btn = QPushButton()
+        self._apply_device_btn.clicked.connect(self._apply_devices)
+        device_buttons.addWidget(self._refresh_device_btn)
+        device_buttons.addWidget(self._apply_device_btn)
         device_layout.addLayout(device_buttons)
-        layout.addWidget(device_group)
+        left_layout.addWidget(self._device_group)
 
-        # --- Effects control ---
-        effects_group = QGroupBox("Effects Control")
-        effects_layout = QVBoxLayout(effects_group)
-        self._effects_label = QLabel("No effects")
-        self._effects_label.setStyleSheet("padding: 8px;")
+        self._effects_group = QGroupBox()
+        effects_layout = QVBoxLayout(self._effects_group)
+        self._effects_label = QLabel()
+        self._effects_label.setStyleSheet("padding: 5px;")
         effects_layout.addWidget(self._effects_label)
 
-        refresh_effects_btn = QPushButton("Refresh Effects")
-        refresh_effects_btn.clicked.connect(self._update_effects_display)
-        effects_layout.addWidget(refresh_effects_btn)
+        self._refresh_effects_btn = QPushButton()
+        self._refresh_effects_btn.clicked.connect(self._update_effects_display)
+        effects_layout.addWidget(self._refresh_effects_btn)
+
+        effect_buttons = QHBoxLayout()
+        self._effect_buttons: dict[str, QPushButton] = {}
         for name in ("RobotEffect", "EchoEffect", "GainEffect"):
-            button = QPushButton(f"Toggle {name.replace('Effect', '')}")
+            button = QPushButton()
             button.clicked.connect(
                 lambda checked=False, effect_name=name: self._toggle_effect(
                     effect_name
                 )
             )
-            effects_layout.addWidget(button)
+            self._effect_buttons[name] = button
+            effect_buttons.addWidget(button)
+        effects_layout.addLayout(effect_buttons)
 
         gain_row = QHBoxLayout()
-        self._gain_label = QLabel("Gain: 2.0")
+        self._gain_label = QLabel()
         self._gain_slider = QSlider(Qt.Horizontal)
         self._gain_slider.setRange(10, 50)
         self._gain_slider.setValue(20)
         self._gain_slider.valueChanged.connect(self._on_gain_changed)
         gain_row.addWidget(self._gain_label)
-        gain_row.addWidget(self._gain_slider)
+        gain_row.addWidget(self._gain_slider, 1)
         effects_layout.addLayout(gain_row)
-        layout.addWidget(effects_group)
+        self._gain_help_label = self._secondary_label()
+        effects_layout.addWidget(self._gain_help_label)
+        left_layout.addWidget(self._effects_group)
 
-        self._ai_voice_panel = RVCControlPanel(context, self._update_effects_display)
-        layout.addWidget(self._ai_voice_panel)
+        self._self_monitor_panel = SelfMonitorPanel(
+            context,
+            language=self._language,
+        )
+        left_layout.addWidget(self._self_monitor_panel)
+        left_layout.addStretch()
 
-        self._self_monitor_panel = SelfMonitorPanel(context)
-        layout.addWidget(self._self_monitor_panel)
+        # --- Right column: model controls, advanced RVC, runtime status ---
+        self._ai_voice_panel = RVCControlPanel(
+            context,
+            self._update_effects_display,
+            language=self._language,
+        )
+        right_layout.addWidget(self._ai_voice_panel)
 
-        # --- Developer-only RVC tuning ---
-        self._rvc_group = QGroupBox("AI Voice / RVC Advanced")
+        self._rvc_group = QGroupBox()
         rvc_layout = QVBoxLayout(self._rvc_group)
-        self._rvc_status_label = QLabel("RVC engine unavailable")
+        self._rvc_status_label = QLabel()
+        self._rvc_status_label.setWordWrap(True)
         rvc_layout.addWidget(self._rvc_status_label)
 
         pitch_row = QHBoxLayout()
-        self._rvc_pitch_label = QLabel("Pitch: 0")
+        self._rvc_pitch_label = QLabel()
         self._rvc_pitch_slider = QSlider(Qt.Horizontal)
         self._rvc_pitch_slider.setRange(-12, 12)
         self._rvc_pitch_slider.setSingleStep(1)
         self._rvc_pitch_slider.setValue(0)
         self._rvc_pitch_slider.valueChanged.connect(self._on_rvc_config_changed)
         pitch_row.addWidget(self._rvc_pitch_label)
-        pitch_row.addWidget(self._rvc_pitch_slider)
+        pitch_row.addWidget(self._rvc_pitch_slider, 1)
         rvc_layout.addLayout(pitch_row)
+        self._pitch_help_label = self._secondary_label()
+        rvc_layout.addWidget(self._pitch_help_label)
 
         index_row = QHBoxLayout()
-        self._rvc_index_label = QLabel("Index Rate: 0.75")
+        self._rvc_index_label = QLabel()
         self._rvc_index_slider = QSlider(Qt.Horizontal)
         self._rvc_index_slider.setRange(0, 100)
         self._rvc_index_slider.setSingleStep(1)
         self._rvc_index_slider.setValue(75)
         self._rvc_index_slider.valueChanged.connect(self._on_rvc_config_changed)
         index_row.addWidget(self._rvc_index_label)
-        index_row.addWidget(self._rvc_index_slider)
+        index_row.addWidget(self._rvc_index_slider, 1)
         rvc_layout.addLayout(index_row)
+        self._index_help_label = self._secondary_label()
+        rvc_layout.addWidget(self._index_help_label)
 
         protect_row = QHBoxLayout()
-        self._rvc_protect_label = QLabel("Protect: 0.33")
+        self._rvc_protect_label = QLabel()
         self._rvc_protect_slider = QSlider(Qt.Horizontal)
         self._rvc_protect_slider.setRange(0, 50)
         self._rvc_protect_slider.setSingleStep(1)
         self._rvc_protect_slider.setValue(33)
         self._rvc_protect_slider.valueChanged.connect(self._on_rvc_config_changed)
         protect_row.addWidget(self._rvc_protect_label)
-        protect_row.addWidget(self._rvc_protect_slider)
+        protect_row.addWidget(self._rvc_protect_slider, 1)
         rvc_layout.addLayout(protect_row)
+        self._protect_help_label = self._secondary_label()
+        rvc_layout.addWidget(self._protect_help_label)
 
         rms_row = QHBoxLayout()
-        self._rvc_rms_label = QLabel("RMS Mix Rate: 0.25")
+        self._rvc_rms_label = QLabel()
         self._rvc_rms_slider = QSlider(Qt.Horizontal)
         self._rvc_rms_slider.setRange(0, 100)
         self._rvc_rms_slider.setSingleStep(1)
         self._rvc_rms_slider.setValue(25)
         self._rvc_rms_slider.valueChanged.connect(self._on_rvc_config_changed)
         rms_row.addWidget(self._rvc_rms_label)
-        rms_row.addWidget(self._rvc_rms_slider)
+        rms_row.addWidget(self._rvc_rms_slider, 1)
         rvc_layout.addLayout(rms_row)
-        layout.addWidget(self._rvc_group)
+        self._rms_help_label = self._secondary_label()
+        rvc_layout.addWidget(self._rms_help_label)
+        right_layout.addWidget(self._rvc_group)
 
-        # --- Runtime status ---
-        status_group = QGroupBox("Status")
-        status_layout = QVBoxLayout(status_group)
-        self._status_label = QLabel("Audio: not started")
-        self._status_label.setStyleSheet("padding: 8px;")
+        self._status_group = QGroupBox()
+        status_layout = QVBoxLayout(self._status_group)
+        self._status_label = QLabel()
+        self._status_label.setStyleSheet("padding: 5px;")
         status_layout.addWidget(self._status_label)
         stream_buttons = QHBoxLayout()
-        self._start_btn = QPushButton("Start Audio")
+        self._start_btn = QPushButton()
         self._start_btn.clicked.connect(self._start_audio)
-        self._stop_btn = QPushButton("Stop Audio")
+        self._stop_btn = QPushButton()
         self._stop_btn.clicked.connect(self._stop_audio)
         stream_buttons.addWidget(self._start_btn)
         stream_buttons.addWidget(self._stop_btn)
         status_layout.addLayout(stream_buttons)
-        layout.addWidget(status_group)
-        layout.addStretch()
+        right_layout.addWidget(self._status_group)
+        right_layout.addStretch()
 
-        self.statusBar().showMessage("Ready")
+        self._apply_static_language()
+        self.statusBar().showMessage(self._t("status.ready"))
         self._update_effects_display()
         self._refresh_device_choices()
         self._update_status_display()
@@ -180,6 +285,58 @@ class MainWindow(QMainWindow):
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._update_status_display)
         self._status_timer.start(500)
+
+    @staticmethod
+    def _secondary_label() -> QLabel:
+        label = QLabel()
+        label.setWordWrap(True)
+        label.setObjectName("secondaryText")
+        return label
+
+    def _t(self, key: str, **values) -> str:
+        return tr(self._language, key, **values)
+
+    def _toggle_language(self) -> None:
+        self._language = "zh" if self._language == "en" else "en"
+        self._apply_static_language()
+        self._ai_voice_panel.set_language(self._language)
+        self._self_monitor_panel.set_language(self._language)
+        self._update_effects_display()
+        self._update_device_display()
+        self._update_status_display()
+        self.statusBar().showMessage(self._t("status.ready"))
+
+    def _apply_static_language(self) -> None:
+        self.setWindowTitle(self._t("window.title"))
+        self._app_title_label.setText(self._t("window.title"))
+        self._language_caption_label.setText(self._t("language.caption"))
+        self._language_button.setText(self._t("language.switch"))
+        self._device_group.setTitle(self._t("device.group"))
+        self._input_title_label.setText(self._t("device.input"))
+        self._output_title_label.setText(self._t("device.output"))
+        self._refresh_device_btn.setText(self._t("device.refresh"))
+        self._apply_device_btn.setText(self._t("device.apply"))
+        self._effects_group.setTitle(self._t("effects.group"))
+        self._refresh_effects_btn.setText(self._t("effects.refresh"))
+        self._effect_buttons["RobotEffect"].setText(
+            self._t("effects.toggle_robot")
+        )
+        self._effect_buttons["EchoEffect"].setText(
+            self._t("effects.toggle_echo")
+        )
+        self._effect_buttons["GainEffect"].setText(
+            self._t("effects.toggle_gain")
+        )
+        self._gain_help_label.setText(self._t("gain.help"))
+        self._rvc_group.setTitle(self._t("advanced.group"))
+        self._pitch_help_label.setText(self._t("pitch.help"))
+        self._index_help_label.setText(self._t("index.help"))
+        self._protect_help_label.setText(self._t("protect.help"))
+        self._rms_help_label.setText(self._t("rms.help"))
+        self._status_group.setTitle(self._t("status.group"))
+        self._start_btn.setText(self._t("status.start"))
+        self._stop_btn.setText(self._t("status.stop"))
+        self._update_rvc_labels()
 
     def _effect_manager(self):
         return (
@@ -208,10 +365,12 @@ class MainWindow(QMainWindow):
         """Refresh advanced controls from the current immutable config."""
         engine = self._rvc_engine()
         config = getattr(engine, "config", None) if engine is not None else None
-        available = config is not None and callable(getattr(engine, "update_config", None))
+        available = config is not None and callable(
+            getattr(engine, "update_config", None)
+        )
         self._rvc_group.setEnabled(available)
         if not available:
-            self._rvc_status_label.setText("RVC engine unavailable")
+            self._rvc_status_label.setText(self._t("advanced.unavailable"))
             return
 
         controls = (
@@ -225,7 +384,7 @@ class MainWindow(QMainWindow):
             slider.setValue(value)
             slider.blockSignals(False)
         self._update_rvc_labels()
-        self._rvc_status_label.setText("Runtime updates apply to the next inference")
+        self._rvc_status_label.setText(self._t("advanced.next_inference"))
 
     def _update_rvc_labels(self) -> None:
         pitch = self._rvc_pitch_slider.value()
@@ -238,6 +397,9 @@ class MainWindow(QMainWindow):
         )
         self._rvc_rms_label.setText(
             f"RMS Mix Rate: {self._rvc_rms_slider.value() / 100.0:.2f}"
+        )
+        self._gain_label.setText(
+            self._t("gain.value", value=self._gain_slider.value() / 10.0)
         )
 
     def _on_rvc_config_changed(self, _value: int) -> None:
@@ -257,17 +419,19 @@ class MainWindow(QMainWindow):
             )
         except Exception as exc:
             logger.error("GUI RVC config update failed: {}", exc)
-            self.statusBar().showMessage(f"RVC config update failed: {exc}")
+            self.statusBar().showMessage(
+                self._t("status.rvc_update_failed", error=exc)
+            )
             self._sync_rvc_controls()
             return
-        self._rvc_status_label.setText("Runtime config updated")
-        self.statusBar().showMessage("RVC runtime config updated")
+        self._rvc_status_label.setText(self._t("advanced.updated"))
+        self.statusBar().showMessage(self._t("status.rvc_updated"))
 
     def _update_effects_display(self) -> None:
         """Read every displayed state from the shared EffectManager."""
         effect_manager = self._effect_manager()
         if effect_manager is None:
-            self._effects_label.setText("Effects: (N/A)")
+            self._effects_label.setText(self._t("effects.unavailable"))
             self._sync_rvc_controls()
             return
 
@@ -275,7 +439,9 @@ class MainWindow(QMainWindow):
             f"{effect.name}: {'ON' if effect.enabled else 'OFF'}"
             for effect in effect_manager.effects
         ]
-        self._effects_label.setText("\n".join(lines) if lines else "No effects")
+        self._effects_label.setText(
+            "\n".join(lines) if lines else self._t("effects.none")
+        )
 
         gain_effect = effect_manager.get_by_name("GainEffect")
         if gain_effect is not None:
@@ -286,7 +452,9 @@ class MainWindow(QMainWindow):
             self._gain_slider.blockSignals(True)
             self._gain_slider.setValue(slider_value)
             self._gain_slider.blockSignals(False)
-            self._gain_label.setText(f"Gain: {gain_effect.gain:.1f}")
+            self._gain_label.setText(
+                self._t("gain.value", value=gain_effect.gain)
+            )
         self._sync_rvc_controls()
 
     def _toggle_effect(self, effect_name: str) -> None:
@@ -294,12 +462,16 @@ class MainWindow(QMainWindow):
         effect_manager = self._effect_manager()
         if effect_manager is None:
             logger.warning("GUI toggle ignored: EffectManager is unavailable")
-            self.statusBar().showMessage("Effect manager unavailable")
+            self.statusBar().showMessage(
+                self._t("status.effect_manager_unavailable")
+            )
             return
         effect = effect_manager.get_by_name(effect_name)
         if effect is None:
             logger.warning("GUI toggle ignored: effect not found: {}", effect_name)
-            self.statusBar().showMessage(f"Effect not found: {effect_name}")
+            self.statusBar().showMessage(
+                self._t("status.effect_not_found", name=effect_name)
+            )
             return
         if effect.enabled:
             effect_manager.disable(effect_name)
@@ -316,10 +488,14 @@ class MainWindow(QMainWindow):
         gain_effect = effect_manager.get_by_name("GainEffect")
         if gain_effect is None:
             logger.warning("GUI gain change ignored: GainEffect not found")
-            self.statusBar().showMessage("Effect not found: GainEffect")
+            self.statusBar().showMessage(
+                self._t("status.effect_not_found", name="GainEffect")
+            )
             return
         gain_effect.gain = value / 10.0
-        self._gain_label.setText(f"Gain: {gain_effect.gain:.1f}")
+        self._gain_label.setText(
+            self._t("gain.value", value=gain_effect.gain)
+        )
 
     def _refresh_device_choices(self) -> None:
         """Re-enumerate via DeviceManager without changing the audio stream."""
@@ -329,7 +505,10 @@ class MainWindow(QMainWindow):
             else None
         )
         if device_manager is None:
-            self._device_label.setText("Input: (N/A)\nOutput: (N/A)")
+            self._device_label.setText(
+                f"{self._t('device.input')} (N/A)\n"
+                f"{self._t('device.output')} (N/A)"
+            )
             return
 
         input_preferred = (
@@ -347,7 +526,9 @@ class MainWindow(QMainWindow):
             output_devices = device_manager.list_output_devices()
         except Exception as exc:
             logger.error("GUI device refresh failed: {}", exc)
-            self.statusBar().showMessage(f"Device refresh failed: {exc}")
+            self.statusBar().showMessage(
+                self._t("status.device_refresh_failed", error=exc)
+            )
             return
 
         self._populate_device_combo(
@@ -361,15 +542,14 @@ class MainWindow(QMainWindow):
             output_preferred,
         )
         self._update_device_display()
-        self.statusBar().showMessage("Device list refreshed")
+        self.statusBar().showMessage(self._t("status.device_refreshed"))
         self._self_monitor_panel.refresh_devices()
 
-    @staticmethod
-    def _populate_device_combo(combo, devices, preferred_index) -> None:
+    def _populate_device_combo(self, combo, devices, preferred_index) -> None:
         """Populate a combo with device indices as item data, never parsed text."""
         combo.blockSignals(True)
         combo.clear()
-        combo.addItem("System Default", None)
+        combo.addItem(self._t("device.system_default"), None)
         for device in devices:
             combo.addItem(f"[{device.index}] {device.name}", device.index)
         selected = combo.findData(preferred_index)
@@ -379,10 +559,15 @@ class MainWindow(QMainWindow):
     def _apply_devices(self) -> None:
         """Apply selected indices through the application switching transaction."""
         if self._context is None:
-            self.statusBar().showMessage("Application context unavailable")
+            self.statusBar().showMessage(
+                self._t("status.context_unavailable")
+            )
             return
-        if self._input_combo.currentIndex() < 0 or self._output_combo.currentIndex() < 0:
-            self.statusBar().showMessage("Select both input and output devices")
+        if (
+            self._input_combo.currentIndex() < 0
+            or self._output_combo.currentIndex() < 0
+        ):
+            self.statusBar().showMessage(self._t("status.select_devices"))
             return
 
         input_device = self._input_combo.currentData()
@@ -395,13 +580,23 @@ class MainWindow(QMainWindow):
         if result.success:
             self._update_device_display()
             self._update_status_display()
-            self.statusBar().showMessage("Audio devices applied")
+            self.statusBar().showMessage(self._t("status.devices_applied"))
             self._self_monitor_panel.refresh_devices()
         else:
             self._update_device_display()
             self._update_status_display()
-            suffix = " (previous stream restored)" if result.restored_previous_stream else ""
-            self.statusBar().showMessage(f"Device switch failed{suffix}: {result.error}")
+            suffix = (
+                self._t("status.previous_restored")
+                if result.restored_previous_stream
+                else ""
+            )
+            self.statusBar().showMessage(
+                self._t(
+                    "status.device_switch_failed",
+                    suffix=suffix,
+                    error=result.error,
+                )
+            )
 
     def _update_device_display(self) -> None:
         """Display the devices used by the current context stream."""
@@ -411,17 +606,21 @@ class MainWindow(QMainWindow):
             else None
         )
         if device_manager is None:
-            self._device_label.setText("Input: (N/A)\nOutput: (N/A)")
+            self._device_label.setText(
+                f"{self._t('device.input')} (N/A)\n"
+                f"{self._t('device.output')} (N/A)"
+            )
             return
         try:
             input_name = device_manager.get_device_name(self._context.input_device)
             output_name = device_manager.get_device_name(self._context.output_device)
         except Exception as exc:
             logger.error("GUI device status refresh failed: {}", exc)
-            input_name = "Unknown Device"
-            output_name = "Unknown Device"
+            input_name = self._t("device.unknown")
+            output_name = self._t("device.unknown")
         self._device_label.setText(
-            f"Current input: {input_name}\nCurrent output: {output_name}"
+            f"{self._t('device.current_input', name=input_name)}\n"
+            f"{self._t('device.current_output', name=output_name)}"
         )
 
     def _update_status_display(self) -> None:
@@ -432,18 +631,21 @@ class MainWindow(QMainWindow):
             else None
         )
         if stream is None:
-            audio_lines = ["Audio: (N/A)"]
+            audio_lines = [self._t("status.audio_na")]
         elif stream.is_running:
             count = getattr(stream, "_callback_count", 0)
             total = getattr(stream, "_total_proc_ms", 0.0)
             average = total / count if count > 0 else 0.0
             audio_lines = [
-                "Audio: Running",
-                f"Processing avg: {average:.2f} ms",
-                f"Processing max: {getattr(stream, '_max_proc_ms', 0.0):.2f} ms",
+                self._t("status.audio_running"),
+                self._t("status.processing_avg", value=average),
+                self._t(
+                    "status.processing_max",
+                    value=getattr(stream, "_max_proc_ms", 0.0),
+                ),
             ]
         else:
-            audio_lines = ["Audio: Stopped"]
+            audio_lines = [self._t("status.audio_stopped")]
 
         ai_effect = None
         effect_manager = self._effect_manager()
@@ -454,7 +656,11 @@ class MainWindow(QMainWindow):
             and ai_effect.engine.is_loaded
             and ai_effect.is_running
         )
-        audio_lines.append(f"AI model: {'Ready' if ai_ready else 'Not loaded'}")
+        audio_lines.append(
+            self._t("status.ai_ready")
+            if ai_ready
+            else self._t("status.ai_not_loaded")
+        )
         self._status_label.setText("\n".join(audio_lines))
         self._ai_voice_panel.update_status()
 
@@ -471,10 +677,12 @@ class MainWindow(QMainWindow):
             stream.start()
         except Exception as exc:
             logger.error("GUI audio start failed: {}", exc)
-            self.statusBar().showMessage(f"Audio start failed: {exc}")
+            self.statusBar().showMessage(
+                self._t("status.audio_start_failed", error=exc)
+            )
             return
         self._update_status_display()
-        self.statusBar().showMessage("Audio started")
+        self.statusBar().showMessage(self._t("status.audio_started"))
 
     def _stop_audio(self) -> None:
         """Stop the current audio stream via AppContext."""
@@ -489,7 +697,9 @@ class MainWindow(QMainWindow):
             stream.stop()
         except Exception as exc:
             logger.error("GUI audio stop failed: {}", exc)
-            self.statusBar().showMessage(f"Audio stop failed: {exc}")
+            self.statusBar().showMessage(
+                self._t("status.audio_stop_failed", error=exc)
+            )
             return
         self._update_status_display()
-        self.statusBar().showMessage("Audio stopped")
+        self.statusBar().showMessage(self._t("status.audio_stopped"))

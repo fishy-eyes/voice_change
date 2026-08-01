@@ -154,7 +154,9 @@ class RVCModelImportGUITests(unittest.TestCase):
         ):
             panel.import_button.click()
 
-        notice.assert_called_once_with("未找到index，将使用无index模式")
+        notice.assert_called_once_with(
+            "No index was found; no-index mode will be used."
+        )
         self.assertEqual(manager.imports, [(directory, pth, None)])
         self.assertEqual(runtime.loads[0][0], "imported")
         self.assertIn("index: none", panel.status_label.text())
@@ -178,7 +180,7 @@ class RVCModelImportGUITests(unittest.TestCase):
         ):
             panel.import_button.click()
 
-        warning.assert_called_once_with("未发现RVC模型权重文件")
+        warning.assert_called_once_with("No RVC model weight file was found.")
         self.assertEqual(manager.imports, [])
         self.assertEqual(runtime.loads, [])
 

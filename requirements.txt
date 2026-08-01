@@ -1,10 +1,33 @@
-# Audio
-sounddevice
-numpy
-scipy
+# Verified runtime environment
+# OS: Windows 10/11 x64
+# Python: 3.11.15 (Anaconda)
+# GPU runtime: NVIDIA CUDA 12.1 (recommended for real-time RVC)
+# Tested GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+#
+# PyTorch CUDA wheels are resolved from the official cu121 index below.
+# For CPU-only installation, remove this line and install matching CPU builds.
+--extra-index-url https://download.pytorch.org/whl/cu121
 
-# GUI
-PySide6
+# Application audio and numeric processing
+numpy==1.26.4
+scipy==1.17.1
+sounddevice==0.5.5
 
-# Utilities
-loguru
+# Desktop GUI
+PySide6==6.11.1
+
+# Logging
+loguru==0.7.3
+
+# RVC inference runtime
+torch==2.1.2+cu121
+torchaudio==2.1.2+cu121
+transformers==4.49.0
+faiss-cpu==1.14.3
+librosa==0.11.0
+soundfile==0.14.0
+praat-parselmouth==0.4.7
+numba==0.66.0
+llvmlite==0.48.0
+scikit-learn==1.9.0
+tqdm==4.70.0
