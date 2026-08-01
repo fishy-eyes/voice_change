@@ -35,3 +35,6 @@ logs/
 # Generated outputs
 output/
 outputs/
+
+# Machine-local external RVC model registry
+config/user_models.json*

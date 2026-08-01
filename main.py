@@ -9,6 +9,8 @@ from typing import Callable, Optional
 from loguru import logger
 
 from audio.device_manager import DeviceManager
+from audio.monitor import SelfMonitor
+from audio.output_router import OutputRoutingEffectManager
 from audio.player import AudioPlayer
 from audio.recorder import AudioRecorder
 from audio.stream import AudioStream
@@ -23,6 +25,7 @@ from config.settings import (
     GAIN_VALUE,
     INPUT_DEVICE,
     ROBOT_FREQUENCY,
+    RVC_USER_MODELS_FILE,
     RVC_DEFAULT_MODEL,
     RVC_MODEL_LIBRARY_DIR,
     SHOW_DEVICE_LIST,
@@ -95,6 +98,7 @@ def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
 def create_effect_manager(
     ai_voice_effect: Optional[AIVoiceEffect] = None,
     *,
+    self_monitor: Optional[SelfMonitor] = None,
     gain_enabled: bool = ENABLE_GAIN,
     echo_enabled: bool = ENABLE_ECHO,
     robot_enabled: bool = ENABLE_ROBOT,
@@ -104,7 +108,11 @@ def create_effect_manager(
     Base effects are always registered so runtime controls can enable them.
     Configuration only determines their initial enabled state.
     """
-    effect_manager = EffectManager()
+    effect_manager = (
+        OutputRoutingEffectManager(self_monitor)
+        if self_monitor is not None
+        else EffectManager()
+    )
     if ai_voice_effect is not None:
         effect_manager.add(ai_voice_effect)
 
@@ -157,6 +165,7 @@ def main() -> None:
     rvc_runtime: Optional[RVCRuntime] = None
     stream: Optional[AudioStream] = None
     context: Optional[AppContext] = None
+    self_monitor: Optional[SelfMonitor] = None
     cli_thread: Optional[threading.Thread] = None
 
     try:
@@ -164,8 +173,12 @@ def main() -> None:
         recorder = AudioRecorder(device=input_idx)
         player = AudioPlayer(device=output_idx)
 
-        effect_manager = create_effect_manager()
-        model_manager = RVCModelManager(RVC_MODEL_LIBRARY_DIR)
+        self_monitor = SelfMonitor()
+        effect_manager = create_effect_manager(self_monitor=self_monitor)
+        model_manager = RVCModelManager(
+            RVC_MODEL_LIBRARY_DIR,
+            user_models_path=RVC_USER_MODELS_FILE,
+        )
         rvc_runtime = RVCRuntime(model_manager)
         rvc_runtime.bind_effect_manager(effect_manager)
         rvc_runtime.set_enabled(ENABLE_AI_VOICE)
@@ -190,6 +203,7 @@ def main() -> None:
             input_device=input_idx,
             output_device=output_idx,
             rvc_runtime=rvc_runtime,
+            self_monitor=self_monitor,
         )
         app, _window = create_app(context)
         _quit_callback = app.quit
@@ -210,7 +224,13 @@ def main() -> None:
         _stop_event.set()
         _quit_callback = None
 
-        # Ownership order: AudioStream -> Effect/Worker -> Engine.
+        # Ownership order: monitor -> AudioStream -> Effect/Worker -> Engine.
+        if self_monitor is not None:
+            try:
+                self_monitor.stop()
+            except Exception as exc:
+                logger.error("SelfMonitor stop failed: {}", exc)
+
         stop_current_audio_stream(context, fallback=stream)
 
         cleaned = (

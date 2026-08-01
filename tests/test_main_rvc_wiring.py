@@ -66,11 +66,23 @@ class FakeThread:
         pass
 
 
+class FakeSelfMonitor:
+    instance = None
+
+    def __init__(self) -> None:
+        type(self).instance = self
+        self.stop_called = False
+
+    def stop(self) -> None:
+        self.stop_called = True
+
+
 class MainRVCWiringTests(unittest.TestCase):
+    @patch("main.SelfMonitor", FakeSelfMonitor)
     @patch("main.threading.Thread", FakeThread)
     @patch("main.create_app", return_value=(FakeApp(), object()))
     @patch("main.RVCRuntime", FakeRuntime)
-    @patch("main.RVCModelManager", side_effect=lambda root: SimpleNamespace(root=root))
+    @patch("main.RVCModelManager", side_effect=lambda root, **kwargs: SimpleNamespace(root=root, **kwargs))
     @patch("main.AudioStream", FakeStream)
     @patch("main.AudioPlayer", side_effect=lambda device=None: SimpleNamespace(device=device))
     @patch("main.AudioRecorder", side_effect=lambda device=None: SimpleNamespace(device=device))
@@ -87,6 +99,8 @@ class MainRVCWiringTests(unittest.TestCase):
         self.assertEqual(runtime.loaded, "modelF")
         self.assertIsNotNone(runtime.bound)
         self.assertTrue(runtime.shutdown_called)
+        self.assertIsNotNone(FakeSelfMonitor.instance)
+        self.assertTrue(FakeSelfMonitor.instance.stop_called)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,21 @@
-"""Developer-facing RVC model selection and enable controls."""
+"""Developer-facing RVC model selection, import and enable controls."""
 
 from __future__ import annotations
 
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Iterable
 
 from loguru import logger
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
 )
@@ -29,6 +33,7 @@ class RVCControlPanel(QGroupBox):
         super().__init__("AI Voice")
         self._context = context
         self._on_changed = on_changed
+        self._descriptors: dict[str, object] = {}
 
         layout = QVBoxLayout(self)
         self.enable_checkbox = QCheckBox("Enable AI Voice")
@@ -38,10 +43,16 @@ class RVCControlPanel(QGroupBox):
         model_row = QHBoxLayout()
         model_row.addWidget(QLabel("Model:"))
         self.model_combo = QComboBox()
+        self.model_combo.currentIndexChanged.connect(
+            self._on_model_selection_changed
+        )
         model_row.addWidget(self.model_combo)
         self.load_button = QPushButton("Load Model")
         self.load_button.clicked.connect(self._load_selected_model)
         model_row.addWidget(self.load_button)
+        self.import_button = QPushButton("导入RVC模型")
+        self.import_button.clicked.connect(self._import_model)
+        model_row.addWidget(self.import_button)
         layout.addLayout(model_row)
 
         realtime_row = QHBoxLayout()
@@ -104,28 +115,39 @@ class RVCControlPanel(QGroupBox):
         runtime = self._runtime()
         self._refresh_realtime_mode()
         selected = getattr(runtime, "selected_model", None)
+        self.model_combo.blockSignals(True)
         self.model_combo.clear()
+        self._descriptors.clear()
         if runtime is None:
+            self.model_combo.blockSignals(False)
             self.model_combo.setEnabled(False)
             self.load_button.setEnabled(False)
+            self.import_button.setEnabled(False)
             self.enable_checkbox.setEnabled(False)
             self.status_label.setText("RVC runtime unavailable")
             return
 
+        manager = getattr(runtime, "model_manager", None)
+        can_import = manager is not None and callable(
+            getattr(manager, "import_model", None)
+        )
+        self.import_button.setEnabled(can_import)
         self.enable_checkbox.blockSignals(True)
         self.enable_checkbox.setChecked(bool(runtime.enabled))
         self.enable_checkbox.blockSignals(False)
         try:
-            models = runtime.model_manager.discover_models()
+            models = manager.discover_models() if manager is not None else []
         except Exception as exc:
             logger.error("GUI RVC model discovery failed: {}", exc)
             models = []
             self.status_label.setText(f"Model discovery failed: {exc}")
         for descriptor in models:
+            self._descriptors[descriptor.name] = descriptor
             self.model_combo.addItem(descriptor.name, descriptor.name)
         model_index = self.model_combo.findData(selected)
         if model_index >= 0:
             self.model_combo.setCurrentIndex(model_index)
+        self.model_combo.blockSignals(False)
         has_models = bool(models)
         self.model_combo.setEnabled(has_models)
         self.load_button.setEnabled(has_models)
@@ -137,14 +159,53 @@ class RVCControlPanel(QGroupBox):
         if runtime is None:
             self.status_label.setText("RVC runtime unavailable")
             return
+        descriptor = self._current_descriptor()
         state = runtime.state
         if state.ready and runtime.selected_model:
             mode = "Enabled" if runtime.enabled else "Bypassed"
-            self.status_label.setText(f"Loaded: {runtime.selected_model} ({mode})")
+            heading = f"Loaded: {runtime.selected_model} ({mode})"
+            try:
+                descriptor = runtime.model_manager.get_model(runtime.selected_model)
+            except Exception:
+                pass
         elif state.error:
-            self.status_label.setText(f"Not loaded: {state.error}")
+            heading = f"Not loaded: {state.error}"
         else:
-            self.status_label.setText("Not loaded")
+            heading = "Not loaded"
+        details = self._format_descriptor_status(descriptor)
+        self.status_label.setText(
+            heading if not details else f"{heading}\n{details}"
+        )
+
+    @staticmethod
+    def _format_descriptor_status(descriptor) -> str:
+        if descriptor is None or not hasattr(descriptor, "pth_path"):
+            return ""
+        pth_path = getattr(descriptor, "pth_path", None)
+        index_path = getattr(descriptor, "index_path", None)
+        profile_path = getattr(descriptor, "profile_path", None)
+        profile_is_default = bool(
+            getattr(descriptor, "profile_is_default", profile_path is None)
+        )
+        pth_status = f"✓ {Path(pth_path).name}" if pth_path else "missing"
+        index_status = f"✓ {Path(index_path).name}" if index_path else "none"
+        profile_status = (
+            "default"
+            if profile_is_default or profile_path is None
+            else Path(profile_path).name
+        )
+        return (
+            f"pth: {pth_status}\n"
+            f"index: {index_status}\n"
+            f"profile: {profile_status}"
+        )
+
+    def _current_descriptor(self):
+        name = self.model_combo.currentData()
+        return self._descriptors.get(name)
+
+    def _on_model_selection_changed(self, _index: int) -> None:
+        self.update_status()
 
     def _on_enabled_toggled(self, enabled: bool) -> None:
         runtime = self._runtime()
@@ -191,3 +252,87 @@ class RVCControlPanel(QGroupBox):
             self.update_status()
             if self._on_changed is not None:
                 self._on_changed()
+
+    def _import_model(self) -> None:
+        runtime = self._runtime()
+        manager = getattr(runtime, "model_manager", None) if runtime else None
+        if manager is None:
+            return
+        directory = self._choose_import_directory()
+        if not directory:
+            return
+        try:
+            inspection = manager.inspect_import_directory(directory)
+            if not inspection.pth_candidates:
+                self._show_warning("未发现RVC模型权重文件")
+                return
+            pth_path = self._choose_candidate(
+                "选择RVC模型权重",
+                "检测到多个 .pth 文件，请选择要导入的模型：",
+                inspection.pth_candidates,
+            )
+            if pth_path is None:
+                return
+
+            if not inspection.index_candidates:
+                index_path = None
+                self._show_information("未找到index，将使用无index模式")
+            else:
+                index_path = self._choose_candidate(
+                    "选择RVC索引",
+                    "检测到多个 .index 文件，请选择要关联的索引：",
+                    inspection.index_candidates,
+                )
+                if index_path is None:
+                    return
+
+            descriptor = manager.import_model(
+                inspection.directory,
+                pth_path=pth_path,
+                index_path=index_path,
+            )
+        except Exception as exc:
+            logger.error("GUI RVC model import failed: {}", exc)
+            self._show_warning(f"导入RVC模型失败：{exc}")
+            return
+
+        self.refresh_models()
+        selected_index = self.model_combo.findData(descriptor.name)
+        if selected_index >= 0:
+            self.model_combo.setCurrentIndex(selected_index)
+        self._load_selected_model()
+
+    def _choose_import_directory(self) -> str:
+        return QFileDialog.getExistingDirectory(
+            self,
+            "选择RVC模型文件夹",
+            "",
+        )
+
+    def _choose_candidate(
+        self,
+        title: str,
+        label: str,
+        candidates: Iterable[Path],
+    ) -> Path | None:
+        options = tuple(candidates)
+        if len(options) == 1:
+            return options[0]
+        names = [path.name for path in options]
+        selected, accepted = QInputDialog.getItem(
+            self,
+            title,
+            label,
+            names,
+            0,
+            False,
+        )
+        if not accepted:
+            return None
+        return options[names.index(selected)]
+
+    def _show_warning(self, message: str) -> None:
+        QMessageBox.warning(self, "RVC模型导入", message)
+
+    def _show_information(self, message: str) -> None:
+        QMessageBox.information(self, "RVC模型导入", message)

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from core.device_switching import switch_audio_devices
 from gui.rvc_control_panel import RVCControlPanel
+from gui.self_monitor_panel import SelfMonitorPanel
 
 if TYPE_CHECKING:
     from core.context import AppContext
@@ -32,7 +33,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._context = context
         self.setWindowTitle("Voice Changer")
-        self.resize(640, 900)
+        self.resize(640, 1000)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -99,6 +100,9 @@ class MainWindow(QMainWindow):
 
         self._ai_voice_panel = RVCControlPanel(context, self._update_effects_display)
         layout.addWidget(self._ai_voice_panel)
+
+        self._self_monitor_panel = SelfMonitorPanel(context)
+        layout.addWidget(self._self_monitor_panel)
 
         # --- Developer-only RVC tuning ---
         self._rvc_group = QGroupBox("AI Voice / RVC Advanced")
@@ -358,6 +362,7 @@ class MainWindow(QMainWindow):
         )
         self._update_device_display()
         self.statusBar().showMessage("Device list refreshed")
+        self._self_monitor_panel.refresh_devices()
 
     @staticmethod
     def _populate_device_combo(combo, devices, preferred_index) -> None:
@@ -391,6 +396,7 @@ class MainWindow(QMainWindow):
             self._update_device_display()
             self._update_status_display()
             self.statusBar().showMessage("Audio devices applied")
+            self._self_monitor_panel.refresh_devices()
         else:
             self._update_device_display()
             self._update_status_display()

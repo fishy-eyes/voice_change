@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from audio.stream import AudioStream
+    from audio.monitor import SelfMonitor
     from audio.device_manager import DeviceManager
     from effects.manager import EffectManager
     from core.rvc_runtime import RVCRuntime
@@ -26,6 +27,7 @@ class AppContext:
         input_device: Optional[int] = None,
         output_device: Optional[int] = None,
         rvc_runtime: Optional[RVCRuntime] = None,
+        self_monitor: Optional[SelfMonitor] = None,
     ) -> None:
         self.effect_manager = effect_manager
         self.device_manager = device_manager
@@ -33,3 +35,4 @@ class AppContext:
         self.input_device = input_device
         self.output_device = output_device
         self.rvc_runtime = rvc_runtime
+        self.self_monitor = self_monitor

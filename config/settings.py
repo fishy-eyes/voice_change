@@ -58,6 +58,7 @@ RVC_PROTECT: float = 0.33            # consonant protection (0.0 - 0.5)
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
 RVC_MODEL_LIBRARY_DIR: str = str(PROJECT_ROOT / "models" / "rvc")
 RVC_DEFAULT_MODEL: str = "modelF"
+RVC_USER_MODELS_FILE: str = str(PROJECT_ROOT / "config" / "user_models.json")
 
 # RVC source code root (independent, managed separately)
 RVC_SOURCE_DIR: str = r"D:\Project_all\rvc_core_test\rvc_source"
