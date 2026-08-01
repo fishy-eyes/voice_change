@@ -31,6 +31,7 @@ from config.rvc_profiles import (
     RVCModelProfile,
     load_rvc_profile,
 )
+from config.settings import SAMPLE_RATE
 
 
 class RVCEngine:
@@ -56,7 +57,7 @@ class RVCEngine:
         index_rate: float = 0.75,
         rms_mix_rate: float = 0.25,
         protect: float = 0.33,
-        sample_rate: int = 44100,
+        sample_rate: int = SAMPLE_RATE,
         hubert_path: str | Path | None = None,
         rmvpe_path: str | Path | None = None,
         config: RVCInferenceConfig | Mapping[str, Any] | None = None,
@@ -167,7 +168,7 @@ class RVCEngine:
         *,
         source_dir: str | Path,
         models_dir: str | Path,
-        sample_rate: int = 44100,
+        sample_rate: int = SAMPLE_RATE,
         hubert_path: str | Path | None = None,
         rmvpe_path: str | Path | None = None,
     ) -> "RVCEngine":
@@ -577,7 +578,7 @@ class RVCEngine:
         ----------
         audio : np.ndarray
             Input audio, shape (samples,), dtype float32, mono,
-            at the project sample rate (e.g. 44100 Hz).
+            at the configured project sample rate.
 
         Returns
         -------

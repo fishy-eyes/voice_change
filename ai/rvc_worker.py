@@ -10,7 +10,7 @@ Usage:
     engine = RVCEngine(...)
     engine.load_model()
 
-    worker = RVCWorker(engine, chunk_size=44100)
+    worker = RVCWorker(engine, chunk_size=48000)
     worker.start()
 
     worker.put(audio_chunk)       # non-blocking
@@ -29,6 +29,8 @@ from typing import Optional
 import numpy as np
 from loguru import logger
 
+from config.settings import SAMPLE_RATE
+
 
 class RVCWorker:
     """Dedicated-thread RVC inference worker.
@@ -45,7 +47,7 @@ class RVCWorker:
     engine : RVCEngine
         A loaded RVC engine instance.
     chunk_size : int
-        Expected chunk length in samples (default 44100 = 1s @ 44100Hz).
+        Expected chunk length in samples (default is one configured second).
         Used for logging/validation, not enforced.
     max_queue_size : int
         Maximum depth of input/output queues (default 2).
@@ -55,7 +57,7 @@ class RVCWorker:
     def __init__(
         self,
         engine,
-        chunk_size: int = 44100,
+        chunk_size: int = SAMPLE_RATE,
         max_queue_size: int = 2,
     ) -> None:
         if chunk_size <= 0:

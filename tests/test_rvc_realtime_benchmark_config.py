@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 import unittest
 
 import numpy as np
 
-from test_rvc_realtime_benchmark import (
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from config.settings import SAMPLE_RATE
+from tests.test_rvc_realtime_benchmark import (
     build_overlapping_windows,
     milliseconds_to_samples,
     summarize_performance,
@@ -15,11 +22,12 @@ from test_rvc_realtime_benchmark import (
 
 
 class RealtimeBenchmarkConfigTests(unittest.TestCase):
-    def test_required_chunk_shapes_at_44100_hz(self) -> None:
-        self.assertEqual(milliseconds_to_samples(100, 44100), 4410)
-        self.assertEqual(milliseconds_to_samples(200, 44100), 8820)
-        self.assertEqual(milliseconds_to_samples(325, 44100), 14333)
-        self.assertEqual(milliseconds_to_samples(500, 44100), 22050)
+    def test_required_chunk_shapes_at_configured_rate(self) -> None:
+        self.assertEqual(SAMPLE_RATE, 48000)
+        self.assertEqual(milliseconds_to_samples(100, SAMPLE_RATE), 4800)
+        self.assertEqual(milliseconds_to_samples(200, SAMPLE_RATE), 9600)
+        self.assertEqual(milliseconds_to_samples(325, SAMPLE_RATE), 15600)
+        self.assertEqual(milliseconds_to_samples(500, SAMPLE_RATE), 24000)
 
     def test_settings_reject_overlap_at_or_above_smallest_chunk(self) -> None:
         validate_benchmark_settings([100, 200, 325, 500], 99.0, 10.0, 3, 2)

@@ -52,7 +52,7 @@ def gpu_max_mem_mb() -> float:
 
 def main() -> int:
     section("RVC Inference Profiling")
-    log(f"  10 consecutive calls, 1-second float32 input (44100 Hz)")
+    log("  10 consecutive calls, 1-second float32 input")
 
     # ------------------------------------------------------------------
     # 1. Load model

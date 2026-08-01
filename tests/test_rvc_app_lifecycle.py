@@ -13,6 +13,8 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+from config.settings import SAMPLE_RATE
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 
@@ -34,7 +36,7 @@ def require(condition: bool, message: str) -> None:
 class SlowFakeEngine:
     """Loaded engine whose warmup stays active until the test releases it."""
 
-    def __init__(self, sample_rate: int = 44100, **kwargs) -> None:
+    def __init__(self, sample_rate: int = SAMPLE_RATE, **kwargs) -> None:
         del kwargs
         self.sample_rate = sample_rate
         self.is_loaded = False

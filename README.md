@@ -57,7 +57,7 @@ Microphone
   -> Optional Self Monitor / Headphones
 ```
 
-`AudioStream` 的 PortAudio 回调只处理短音频块，不在回调线程内执行耗时的模型推理。`AIVoiceEffect` 将输入累积成 RVC 窗口并提交给 `RVCWorker`；Worker 在独立线程中调用 `RVCEngine`，完成后的结果进入输出缓冲区，再按照音频回调所需长度连续返回。
+正式链路统一使用 48000 Hz、mono、float32。`AudioStream` 的 PortAudio 回调只处理短音频块，不在回调线程内执行耗时的模型推理。`AIVoiceEffect` 将输入累积成 RVC 窗口并提交给 `RVCWorker`；Worker 在独立线程中调用 `RVCEngine`，完成后的结果进入输出缓冲区，再按照音频回调所需长度连续返回。
 
 默认 Balanced 模式使用 500 ms chunk 和 50 ms overlap。相邻推理窗口使用线性 crossfade 拼接，减少 chunk 边界突变。输入和输出队列均有容量上限，推理落后时不会让实时回调无限积压。
 

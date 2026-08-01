@@ -11,6 +11,7 @@ import numpy as np
 from loguru import logger
 
 from ai.rvc_worker import RVCWorker
+from config.settings import SAMPLE_RATE
 from effects.base import BaseEffect
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ class AIVoiceEffect(BaseEffect):
     def __init__(
         self,
         engine: RVCEngine,
-        chunk_size: int = 44100,
+        chunk_size: int = SAMPLE_RATE,
         overlap_size: int = 0,
         max_queue_size: int = 2,
     ) -> None:
@@ -142,7 +143,7 @@ class AIVoiceEffect(BaseEffect):
 
             self._reset_buffers()
             self._worker.clear_queues()
-            sample_rate = int(getattr(self._engine, "sample_rate", 44100))
+            sample_rate = int(getattr(self._engine, "sample_rate", SAMPLE_RATE))
             timeline = np.arange(self._chunk_size, dtype=np.float32) / sample_rate
             warmup_audio = (
                 0.05 * np.sin(2.0 * np.pi * 220.0 * timeline)

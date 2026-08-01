@@ -20,10 +20,15 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+from config.settings import SAMPLE_RATE
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 
-CHUNK_SIZES = (44100, 33075, 22050, 16538, 11025)
+CHUNK_SIZES = tuple(
+    int(round(SAMPLE_RATE * seconds))
+    for seconds in (1.0, 0.75, 0.5, 0.375, 0.25)
+)
 SERIAL_COUNT = 8
 STRESS_COUNT = 10
 RESULT_TIMEOUT_SECONDS = 120.0

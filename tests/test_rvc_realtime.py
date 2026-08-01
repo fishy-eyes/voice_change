@@ -73,10 +73,10 @@ def main() -> int:
     # 2. Benchmark different chunk sizes
     # ------------------------------------------------------------------
     section("[2/3] Benchmarking chunk sizes")
-    sr = SAMPLE_RATE  # 44100
+    sr = SAMPLE_RATE
     # chunk sizes in samples: 128, 256, 512, 1024, 2048, 4096, 8192, 16384
-    # plus real-world durations: ~6ms, ~12ms, ~23ms, ~46ms, ~93ms, ~186ms, ~372ms, ~744ms
-    chunk_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 44100, 88200]
+    # plus one and two configured seconds.
+    chunk_sizes = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, sr, sr * 2]
 
     results = []
     warmup_done = False

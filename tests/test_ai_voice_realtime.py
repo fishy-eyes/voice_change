@@ -84,14 +84,14 @@ def main() -> int:
         check(effect.is_running, "worker thread is running")
 
         log("\n[4/6] Feeding 256-sample callback blocks")
-        # 173 blocks provide 44,288 samples: one exact 44,100-sample RVC
-        # submission plus a bounded 188-sample remainder.
-        sample_count = 173 * 256
+        block_count = (SAMPLE_RATE + 255) // 256
+        sample_count = block_count * 256
+        expected_remainder = sample_count - SAMPLE_RATE
         timeline = np.arange(sample_count, dtype=np.float32) / SAMPLE_RATE
         source = (0.3 * np.sin(2 * np.pi * 220.0 * timeline)).astype(np.float32)
         saw_1d = False
         saw_2d = False
-        for index in range(173):
+        for index in range(block_count):
             block_1d = source[index * 256:(index + 1) * 256]
             original = block_1d.copy()
             block = block_1d if index % 2 == 0 else block_1d.reshape(-1, 1)
@@ -107,9 +107,15 @@ def main() -> int:
             saw_1d = saw_1d or block.ndim == 1
             saw_2d = saw_2d or block.ndim == 2
 
-        check(saw_1d and saw_2d, "all 173 callback shapes/dtypes preserved without input mutation")
+        check(
+            saw_1d and saw_2d,
+            f"all {block_count} callback blocks preserved shape/dtype without input mutation",
+        )
         check(saw_1d and saw_2d, "both (frames,) and (frames, 1) inputs handled")
-        check(effect.input_buffered_samples == 188, "exact chunk submitted; 188 samples retained")
+        check(
+            effect.input_buffered_samples == expected_remainder,
+            f"exact chunk submitted; {expected_remainder} samples retained",
+        )
         check(max(process_times_ms) < 100.0, "process() did not wait for full inference")
 
         log("\n[5/6] Waiting for worker output with a 120s deadline")
