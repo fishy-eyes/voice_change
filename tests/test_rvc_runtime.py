@@ -19,6 +19,16 @@ class FakeAI:
     def __init__(self, engine) -> None:
         self.engine = engine
         self.enabled = True
+        self.worker = object()
+        self.realtime_updates: list[tuple[int, int]] = []
+
+    def update_realtime_config(
+        self,
+        *,
+        chunk_size: int,
+        overlap_size: int,
+    ) -> None:
+        self.realtime_updates.append((chunk_size, overlap_size))
 
 
 class FakeStream:
@@ -89,6 +99,23 @@ class RVCRuntimeTests(unittest.TestCase):
         self.assertEqual(stream.stops, 1)
         self.assertEqual(stream.starts, 1)
         cleanup_mock.assert_called_once_with(first, timeout=runtime.stop_timeout)
+
+        worker = second.effect.worker
+        engine = second.effect.engine
+        initialize_calls = initialize_mock.call_count
+        preset = runtime.set_realtime_preset("low_latency")
+        self.assertEqual(preset.name, "Low Latency")
+        self.assertEqual(runtime.realtime_preset_key, "low_latency")
+        self.assertEqual(
+            second.effect.realtime_updates,
+            [(
+                preset.chunk_samples(runtime.sample_rate),
+                preset.overlap_samples(runtime.sample_rate),
+            )],
+        )
+        self.assertIs(second.effect.worker, worker)
+        self.assertIs(second.effect.engine, engine)
+        self.assertEqual(initialize_mock.call_count, initialize_calls)
 
         runtime.set_enabled(False)
         self.assertFalse(second.effect.enabled)

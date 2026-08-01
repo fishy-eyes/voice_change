@@ -9,7 +9,12 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-from config.settings import RVC_DEFAULT_MODEL, RVC_MODEL_LIBRARY_DIR
+from config.settings import (
+    RVC_CHUNK_SIZE,
+    RVC_DEFAULT_MODEL,
+    RVC_MODEL_LIBRARY_DIR,
+    RVC_OVERLAP_SIZE,
+)
 from core.rvc_model_manager import RVCModelManager
 from core.rvc_runtime import RVCRuntime
 from effects.manager import EffectManager
@@ -38,6 +43,11 @@ def main() -> int:
         require(manager.effects[0] is state.effect, "AI effect is first in chain")
         require(state.effect.is_running, "RVC Worker is running")
         require(state.engine.index_cache_info["enabled"], "index cache is active")
+        require(state.effect.chunk_size == RVC_CHUNK_SIZE, "500ms chunk is active")
+        require(
+            state.effect.overlap_size == RVC_OVERLAP_SIZE,
+            "50ms overlap is active",
+        )
         return 0
     except Exception:
         traceback.print_exc()

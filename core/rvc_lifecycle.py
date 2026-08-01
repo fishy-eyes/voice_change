@@ -18,6 +18,7 @@ from config.settings import (
     RVC_INDEX_RATE,
     RVC_INPUT_QUEUE_SIZE,
     RVC_MODELS_DIR,
+    RVC_OVERLAP_SIZE,
     RVC_PITCH_SHIFT,
     RVC_PROTECT,
     RVC_RMS_MIX_RATE,
@@ -70,6 +71,7 @@ def initialize_rvc_application(
     models_dir: str | Path = RVC_MODELS_DIR,
     sample_rate: int = SAMPLE_RATE,
     chunk_size: int = RVC_CHUNK_SIZE,
+    overlap_size: int = RVC_OVERLAP_SIZE,
     input_queue_size: int = RVC_INPUT_QUEUE_SIZE,
     warmup_enabled: bool = RVC_WARMUP_ENABLED,
     warmup_timeout: float = RVC_WARMUP_TIMEOUT,
@@ -140,6 +142,7 @@ def initialize_rvc_application(
             state.engine,
             chunk_size=chunk_size,
             max_queue_size=input_queue_size,
+            overlap_size=overlap_size,
         )
         if not state.effect.start():
             raise RuntimeError("AIVoiceEffect worker failed to start")

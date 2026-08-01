@@ -8,10 +8,14 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from config.rvc_realtime import (
+    RVCRealtimePreset,
+    get_rvc_realtime_preset,
+)
 from config.settings import (
-    RVC_CHUNK_SIZE,
     RVC_INPUT_QUEUE_SIZE,
     RVC_MODELS_DIR,
+    RVC_REALTIME_PRESET,
     RVC_SOURCE_DIR,
     RVC_WARMUP_ENABLED,
     RVC_WARMUP_TIMEOUT,
@@ -41,7 +45,9 @@ class RVCRuntime:
         source_dir: str | Path = RVC_SOURCE_DIR,
         backend_models_dir: str | Path = RVC_MODELS_DIR,
         sample_rate: int = SAMPLE_RATE,
-        chunk_size: int = RVC_CHUNK_SIZE,
+        chunk_size: int | None = None,
+        overlap_size: int | None = None,
+        realtime_preset: str = RVC_REALTIME_PRESET,
         input_queue_size: int = RVC_INPUT_QUEUE_SIZE,
         warmup_enabled: bool = RVC_WARMUP_ENABLED,
         warmup_timeout: float = RVC_WARMUP_TIMEOUT,
@@ -51,7 +57,27 @@ class RVCRuntime:
         self.source_dir = Path(source_dir)
         self.backend_models_dir = Path(backend_models_dir)
         self.sample_rate = int(sample_rate)
-        self.chunk_size = int(chunk_size)
+        preset = get_rvc_realtime_preset(realtime_preset)
+        preset_chunk_size = preset.chunk_samples(self.sample_rate)
+        preset_overlap_size = preset.overlap_samples(self.sample_rate)
+        self.chunk_size = int(
+            preset_chunk_size if chunk_size is None else chunk_size
+        )
+        self.overlap_size = int(
+            preset_overlap_size if overlap_size is None else overlap_size
+        )
+        if self.chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        if self.overlap_size < 0 or self.overlap_size * 2 > self.chunk_size:
+            raise ValueError(
+                "overlap_size must be between 0 and half the chunk_size"
+            )
+        self.realtime_preset_key: str | None = (
+            realtime_preset
+            if self.chunk_size == preset_chunk_size
+            and self.overlap_size == preset_overlap_size
+            else None
+        )
         self.input_queue_size = int(input_queue_size)
         self.warmup_enabled = bool(warmup_enabled)
         self.warmup_timeout = float(warmup_timeout)
@@ -112,6 +138,7 @@ class RVCRuntime:
                     chunk_size=self.chunk_size,
                     input_queue_size=self.input_queue_size,
                     warmup_enabled=self.warmup_enabled,
+                    overlap_size=self.overlap_size,
                     warmup_timeout=self.warmup_timeout,
                     stop_timeout=self.stop_timeout,
                 )
@@ -133,6 +160,36 @@ class RVCRuntime:
             self.state.enabled = self.enabled
             if self.state.effect is not None:
                 self.state.effect.enabled = self.enabled
+
+    @property
+    def realtime_preset(self) -> RVCRealtimePreset | None:
+        """The selected named preset, or ``None`` for custom sample sizes."""
+        if self.realtime_preset_key is None:
+            return None
+        return get_rvc_realtime_preset(self.realtime_preset_key)
+
+    def set_realtime_preset(self, key: str) -> RVCRealtimePreset:
+        """Apply chunk/overlap settings without replacing model or Worker."""
+        preset = get_rvc_realtime_preset(key)
+        chunk_size = preset.chunk_samples(self.sample_rate)
+        overlap_size = preset.overlap_samples(self.sample_rate)
+        with self._lock:
+            effect = self.state.effect
+            if effect is not None:
+                effect.update_realtime_config(
+                    chunk_size=chunk_size,
+                    overlap_size=overlap_size,
+                )
+            self.chunk_size = chunk_size
+            self.overlap_size = overlap_size
+            self.realtime_preset_key = key
+            logger.info(
+                "RVC realtime preset: {} (chunk={}ms, overlap={}ms)",
+                preset.name,
+                preset.chunk_ms,
+                preset.overlap_ms,
+            )
+            return preset
 
     def shutdown(self) -> bool:
         """Detach the effect, stop its Worker, then unload model and caches."""

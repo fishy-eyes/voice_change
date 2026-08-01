@@ -16,6 +16,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from config.rvc_realtime import (
+    RVC_DEFAULT_REALTIME_PRESET,
+    RVC_REALTIME_PRESETS,
+)
+
 
 class RVCControlPanel(QGroupBox):
     """Thin GUI adapter around the application-owned ``RVCRuntime``."""
@@ -39,6 +44,20 @@ class RVCControlPanel(QGroupBox):
         model_row.addWidget(self.load_button)
         layout.addLayout(model_row)
 
+        realtime_row = QHBoxLayout()
+        realtime_row.addWidget(QLabel("Realtime Mode:"))
+        self.realtime_combo = QComboBox()
+        for key, preset in RVC_REALTIME_PRESETS.items():
+            self.realtime_combo.addItem(preset.name, key)
+        self.realtime_combo.currentIndexChanged.connect(
+            self._on_realtime_mode_changed
+        )
+        realtime_row.addWidget(self.realtime_combo)
+        layout.addLayout(realtime_row)
+
+        self.realtime_detail_label = QLabel()
+        layout.addWidget(self.realtime_detail_label)
+
         self.status_label = QLabel("Not loaded")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
@@ -51,8 +70,39 @@ class RVCControlPanel(QGroupBox):
             else None
         )
 
+    def _refresh_realtime_mode(self) -> None:
+        runtime = self._runtime()
+        available = runtime is not None and callable(
+            getattr(runtime, "set_realtime_preset", None)
+        )
+        self.realtime_combo.setEnabled(available)
+        if not available:
+            self.realtime_detail_label.setText("Realtime mode unavailable")
+            return
+
+        key = getattr(runtime, "realtime_preset_key", None)
+        if key is None:
+            key = RVC_DEFAULT_REALTIME_PRESET
+        index = self.realtime_combo.findData(key)
+        self.realtime_combo.blockSignals(True)
+        self.realtime_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.realtime_combo.blockSignals(False)
+        self._update_realtime_detail()
+
+    def _update_realtime_detail(self) -> None:
+        key = self.realtime_combo.currentData()
+        preset = RVC_REALTIME_PRESETS.get(key)
+        if preset is None:
+            self.realtime_detail_label.setText("Custom realtime settings")
+            return
+        self.realtime_detail_label.setText(
+            f"{preset.name}\n"
+            f"{preset.chunk_ms}ms chunk / {preset.overlap_ms}ms overlap"
+        )
+
     def refresh_models(self) -> None:
         runtime = self._runtime()
+        self._refresh_realtime_mode()
         selected = getattr(runtime, "selected_model", None)
         self.model_combo.clear()
         if runtime is None:
@@ -102,6 +152,22 @@ class RVCControlPanel(QGroupBox):
             return
         runtime.set_enabled(enabled)
         self.update_status()
+        if self._on_changed is not None:
+            self._on_changed()
+
+    def _on_realtime_mode_changed(self, _index: int) -> None:
+        runtime = self._runtime()
+        key = self.realtime_combo.currentData()
+        if runtime is None or not key:
+            return
+        try:
+            runtime.set_realtime_preset(key)
+        except Exception as exc:
+            logger.error("GUI RVC realtime preset update failed: {}", exc)
+            self.status_label.setText(f"Realtime mode update failed: {exc}")
+            self._refresh_realtime_mode()
+            return
+        self._update_realtime_detail()
         if self._on_changed is not None:
             self._on_changed()
 

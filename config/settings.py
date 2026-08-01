@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from config.rvc_realtime import (
+    RVC_DEFAULT_REALTIME_PRESET,
+    get_rvc_realtime_preset,
+)
+
 """全局配置"""
 
 # ---- 音频参数 ----
@@ -34,7 +39,12 @@ ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
 
 # ---- AI 变声 ----
 ENABLE_AI_VOICE: bool = True
-RVC_CHUNK_SIZE: int = SAMPLE_RATE // 2
+RVC_REALTIME_PRESET: str = RVC_DEFAULT_REALTIME_PRESET
+_RVC_REALTIME_DEFAULT = get_rvc_realtime_preset(RVC_REALTIME_PRESET)
+RVC_CHUNK_MS: int = _RVC_REALTIME_DEFAULT.chunk_ms
+RVC_OVERLAP_MS: int = _RVC_REALTIME_DEFAULT.overlap_ms
+RVC_CHUNK_SIZE: int = _RVC_REALTIME_DEFAULT.chunk_samples(SAMPLE_RATE)
+RVC_OVERLAP_SIZE: int = _RVC_REALTIME_DEFAULT.overlap_samples(SAMPLE_RATE)
 RVC_INPUT_QUEUE_SIZE: int = 2
 RVC_WARMUP_ENABLED: bool = True
 RVC_WARMUP_TIMEOUT: float = 120.0

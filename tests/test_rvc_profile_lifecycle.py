@@ -32,9 +32,17 @@ class FakeWorker:
 
 
 class FakeEffect:
-    def __init__(self, engine, *, chunk_size: int, max_queue_size: int) -> None:
+    def __init__(
+        self,
+        engine,
+        *,
+        chunk_size: int,
+        overlap_size: int,
+        max_queue_size: int,
+    ) -> None:
         self.engine = engine
         self.chunk_size = chunk_size
+        self.overlap_size = overlap_size
         self.max_queue_size = max_queue_size
         self.worker = FakeWorker()
         self.last_warmup_ms = 0.0

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 import threading
-from time import perf_counter
+from time import monotonic, perf_counter, sleep
 from typing import TYPE_CHECKING, Deque
 
 import numpy as np
@@ -20,26 +20,33 @@ if TYPE_CHECKING:
 class AIVoiceEffect(BaseEffect):
     """Buffer callback audio and run RVC inference outside the callback.
 
-    Input blocks are collected into fixed, non-overlapping chunks for a
-    :class:`RVCWorker`. Completed chunks are buffered and returned in slices
-    matching each input block's shape.
+    Input blocks are collected into overlapping windows for a :class:`RVCWorker`.
+    Completed windows are linearly crossfaded, buffered, and returned in slices
+    matching each input callback block's shape.
     """
 
     def __init__(
         self,
         engine: RVCEngine,
         chunk_size: int = 44100,
+        overlap_size: int = 0,
         max_queue_size: int = 2,
     ) -> None:
         super().__init__()
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
+        if overlap_size < 0 or overlap_size * 2 > chunk_size:
+            raise ValueError(
+                "overlap_size must be between 0 and half the chunk_size"
+            )
         if max_queue_size <= 0:
             raise ValueError("max_queue_size must be positive")
 
         self._engine: RVCEngine = engine
         self._chunk_size = int(chunk_size)
-        self._max_output_samples = self._chunk_size * int(max_queue_size)
+        self._overlap_size = int(overlap_size)
+        self._max_queue_size = int(max_queue_size)
+        self._max_output_samples = self._chunk_size * self._max_queue_size
         self._worker = RVCWorker(
             engine,
             chunk_size=self._chunk_size,
@@ -51,6 +58,7 @@ class AIVoiceEffect(BaseEffect):
         self._input_buffer = np.empty(self._chunk_size, dtype=np.float32)
         self._input_size = 0
 
+        self._pending_output_tail: np.ndarray | None = None
         # Output chunks use a deque plus an offset to avoid repeatedly copying
         # an entire one-second result for every 256-sample callback.
         self._output_chunks: Deque[np.ndarray] = deque()
@@ -76,6 +84,18 @@ class AIVoiceEffect(BaseEffect):
     @property
     def is_running(self) -> bool:
         return self._started and self._worker.is_running
+
+    @property
+    def chunk_size(self) -> int:
+        return self._chunk_size
+
+    @property
+    def overlap_size(self) -> int:
+        return self._overlap_size
+
+    @property
+    def hop_size(self) -> int:
+        return self._chunk_size - self._overlap_size
 
     @property
     def input_buffered_samples(self) -> int:
@@ -175,6 +195,52 @@ class AIVoiceEffect(BaseEffect):
             self._reset_buffers()
             return stopped
 
+    def update_realtime_config(
+        self,
+        *,
+        chunk_size: int,
+        overlap_size: int,
+        timeout: float = 5.0,
+    ) -> None:
+        """Resize streaming buffers while retaining the Engine and Worker."""
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        if overlap_size < 0 or overlap_size * 2 > chunk_size:
+            raise ValueError(
+                "overlap_size must be between 0 and half the chunk_size"
+            )
+        if timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+        with self._state_lock:
+            if (
+                chunk_size == self._chunk_size
+                and overlap_size == self._overlap_size
+            ):
+                return
+
+            # No callback can submit new work while this lock is held. Drain
+            # queued work, let at most the active inference finish, then drop
+            # its old-shape output before swapping buffer geometry.
+            self._worker.clear_queues()
+            deadline = monotonic() + timeout
+            while self._worker.is_inferencing and monotonic() < deadline:
+                sleep(0.005)
+            if self._worker.is_inferencing:
+                raise TimeoutError("active RVC inference did not finish in time")
+            self._worker.clear_queues()
+
+            self._chunk_size = int(chunk_size)
+            self._overlap_size = int(overlap_size)
+            self._max_output_samples = self._chunk_size * self._max_queue_size
+            self._input_buffer = np.empty(self._chunk_size, dtype=np.float32)
+            self._reset_buffers()
+            logger.info(
+                "AIVoiceEffect realtime buffers updated (chunk={}, overlap={})",
+                self._chunk_size,
+                self._overlap_size,
+            )
+
     def process(
         self,
         audio_data: np.ndarray,
@@ -228,6 +294,7 @@ class AIVoiceEffect(BaseEffect):
         self._output_chunks.clear()
         self._output_offset = 0
         self._output_size = 0
+        self._pending_output_tail = None
 
     def _accumulate_input(self, audio: np.ndarray) -> None:
         position = 0
@@ -252,8 +319,13 @@ class AIVoiceEffect(BaseEffect):
                     submitted = False
                 if not submitted:
                     logger.warning("AIVoiceEffect: RVC chunk was not submitted")
-                # Queued or dropped, a full callback-side chunk is never kept.
-                self._input_size = 0
+                # Retain the input tail as context for the next window. Queued
+                # or dropped, callback-side storage remains fixed-size.
+                if self._overlap_size:
+                    self._input_buffer[:self._overlap_size] = self._input_buffer[
+                        self._chunk_size - self._overlap_size:self._chunk_size
+                    ]
+                self._input_size = self._overlap_size
 
     def _drain_worker_output(self) -> None:
         while True:
@@ -264,9 +336,50 @@ class AIVoiceEffect(BaseEffect):
             if chunk.size == 0:
                 continue
             chunk = np.clip(chunk, -1.0, 1.0).astype(np.float32, copy=False)
-            self._output_chunks.append(chunk)
-            self._output_size += chunk.size
+            self._append_converted_window(chunk)
             self._trim_output_buffer()
+
+    def _append_converted_window(self, chunk: np.ndarray) -> None:
+        """Append one converted window using complementary linear overlap."""
+        if chunk.size != self._chunk_size:
+            logger.warning(
+                "AIVoiceEffect: discarded stale output size {} (expected {})",
+                chunk.size,
+                self._chunk_size,
+            )
+            return
+        overlap = self._overlap_size
+        if overlap == 0:
+            self._append_output_chunk(chunk)
+            return
+
+        hop = self.hop_size
+        if self._pending_output_tail is None:
+            self._append_output_chunk(chunk[:hop])
+        else:
+            fade_in = np.linspace(
+                0.0,
+                1.0,
+                overlap,
+                dtype=np.float32,
+            )
+            blended = (
+                self._pending_output_tail * (1.0 - fade_in)
+                + chunk[:overlap] * fade_in
+            ).astype(np.float32, copy=False)
+            if hop > overlap:
+                stitched = np.concatenate((blended, chunk[overlap:hop]))
+            else:
+                stitched = blended
+            self._append_output_chunk(stitched)
+        self._pending_output_tail = chunk[hop:].copy()
+
+    def _append_output_chunk(self, chunk: np.ndarray) -> None:
+        if chunk.size == 0:
+            return
+        converted = np.asarray(chunk, dtype=np.float32).reshape(-1)
+        self._output_chunks.append(converted)
+        self._output_size += converted.size
 
     def _trim_output_buffer(self) -> None:
         """Drop oldest converted samples if callback consumption falls behind."""

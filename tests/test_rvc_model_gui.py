@@ -22,6 +22,8 @@ class FakeRuntime:
             discover_models=lambda: [SimpleNamespace(name="modelF")]
         )
         self.loads: list[tuple[str, object]] = []
+        self.realtime_preset_key = "balanced"
+        self.realtime_calls: list[str] = []
 
     def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
@@ -31,6 +33,10 @@ class FakeRuntime:
         self.selected_model = name
         self.state = SimpleNamespace(ready=True, error=None)
         return self.state
+
+    def set_realtime_preset(self, key: str) -> None:
+        self.realtime_calls.append(key)
+        self.realtime_preset_key = key
 
 
 class RVCModelGUITests(unittest.TestCase):
@@ -51,6 +57,31 @@ class RVCModelGUITests(unittest.TestCase):
         self.assertTrue(runtime.enabled)
         self.assertEqual(runtime.loads, [("modelF", stream)])
         self.assertEqual(panel.status_label.text(), "Loaded: modelF (Enabled)")
+        self.assertEqual(
+            [panel.realtime_combo.itemText(index) for index in range(3)],
+            ["Low Latency", "Balanced", "High Quality"],
+        )
+        self.assertEqual(panel.realtime_combo.currentData(), "balanced")
+        self.assertIn(
+            "500ms chunk / 50ms overlap", panel.realtime_detail_label.text()
+        )
+        panel.realtime_combo.setCurrentIndex(
+            panel.realtime_combo.findData("low_latency")
+        )
+        self.assertEqual(runtime.realtime_calls, ["low_latency"])
+        self.assertIn(
+            "325ms chunk / 50ms overlap", panel.realtime_detail_label.text()
+        )
+
+        panel.realtime_combo.setCurrentIndex(
+            panel.realtime_combo.findData("high_quality")
+        )
+        self.assertEqual(
+            runtime.realtime_calls, ["low_latency", "high_quality"]
+        )
+        self.assertIn(
+            "500ms chunk / 100ms overlap", panel.realtime_detail_label.text()
+        )
 
 
 if __name__ == "__main__":
