@@ -23,16 +23,14 @@ from config.settings import (
     GAIN_VALUE,
     INPUT_DEVICE,
     ROBOT_FREQUENCY,
-    RVC_WORKER_STOP_TIMEOUT,
+    RVC_DEFAULT_MODEL,
+    RVC_MODEL_LIBRARY_DIR,
     SHOW_DEVICE_LIST,
 )
 from core.context import AppContext
 from core.device_switching import stop_current_audio_stream
-from core.rvc_lifecycle import (
-    RVCApplicationState,
-    cleanup_rvc_application,
-    initialize_rvc_application,
-)
+from core.rvc_model_manager import RVCModelManager
+from core.rvc_runtime import RVCRuntime
 from effects.ai_voice import AIVoiceEffect
 from effects.echo import EchoEffect
 from effects.gain import GainEffect
@@ -156,7 +154,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 
-    rvc_state = RVCApplicationState(enabled=ENABLE_AI_VOICE)
+    rvc_runtime: Optional[RVCRuntime] = None
     stream: Optional[AudioStream] = None
     context: Optional[AppContext] = None
     cli_thread: Optional[threading.Thread] = None
@@ -166,14 +164,21 @@ def main() -> None:
         recorder = AudioRecorder(device=input_idx)
         player = AudioPlayer(device=output_idx)
 
-        # Required order: model load -> Worker start -> warmup -> effect chain.
-        rvc_state = initialize_rvc_application(enabled=ENABLE_AI_VOICE)
+        effect_manager = create_effect_manager()
+        model_manager = RVCModelManager(RVC_MODEL_LIBRARY_DIR)
+        rvc_runtime = RVCRuntime(model_manager)
+        rvc_runtime.bind_effect_manager(effect_manager)
+        rvc_runtime.set_enabled(ENABLE_AI_VOICE)
+        if ENABLE_AI_VOICE:
+            rvc_state = rvc_runtime.load_model(RVC_DEFAULT_MODEL)
+            if not rvc_state.ready:
+                logger.warning(
+                    "Default RVC model failed to load; base effects remain available: {}",
+                    rvc_state.error,
+                )
         if _stop_event.is_set():
             logger.info("shutdown requested during initialization")
             return
-
-        ai_effect = rvc_state.effect if rvc_state.ready else None
-        effect_manager = create_effect_manager(ai_effect)
 
         # AudioStream is only created after AI is ready or has safely fallen
         # back to the base effect chain. The GUI may start it later.
@@ -184,6 +189,7 @@ def main() -> None:
             audio_stream=stream,
             input_device=input_idx,
             output_device=output_idx,
+            rvc_runtime=rvc_runtime,
         )
         app, _window = create_app(context)
         _quit_callback = app.quit
@@ -207,10 +213,10 @@ def main() -> None:
         # Ownership order: AudioStream -> Effect/Worker -> Engine.
         stop_current_audio_stream(context, fallback=stream)
 
-
-        cleaned = cleanup_rvc_application(
-            rvc_state,
-            timeout=RVC_WORKER_STOP_TIMEOUT,
+        cleaned = (
+            rvc_runtime.shutdown()
+            if rvc_runtime is not None
+            else True
         )
         if not cleaned:
             logger.warning(

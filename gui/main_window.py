@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.device_switching import switch_audio_devices
+from gui.rvc_control_panel import RVCControlPanel
 
 if TYPE_CHECKING:
     from core.context import AppContext
@@ -31,7 +32,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._context = context
         self.setWindowTitle("Voice Changer")
-        self.resize(640, 560)
+        self.resize(640, 900)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -96,6 +97,60 @@ class MainWindow(QMainWindow):
         effects_layout.addLayout(gain_row)
         layout.addWidget(effects_group)
 
+        self._ai_voice_panel = RVCControlPanel(context, self._update_effects_display)
+        layout.addWidget(self._ai_voice_panel)
+
+        # --- Developer-only RVC tuning ---
+        self._rvc_group = QGroupBox("AI Voice / RVC Advanced")
+        rvc_layout = QVBoxLayout(self._rvc_group)
+        self._rvc_status_label = QLabel("RVC engine unavailable")
+        rvc_layout.addWidget(self._rvc_status_label)
+
+        pitch_row = QHBoxLayout()
+        self._rvc_pitch_label = QLabel("Pitch: 0")
+        self._rvc_pitch_slider = QSlider(Qt.Horizontal)
+        self._rvc_pitch_slider.setRange(-12, 12)
+        self._rvc_pitch_slider.setSingleStep(1)
+        self._rvc_pitch_slider.setValue(0)
+        self._rvc_pitch_slider.valueChanged.connect(self._on_rvc_config_changed)
+        pitch_row.addWidget(self._rvc_pitch_label)
+        pitch_row.addWidget(self._rvc_pitch_slider)
+        rvc_layout.addLayout(pitch_row)
+
+        index_row = QHBoxLayout()
+        self._rvc_index_label = QLabel("Index Rate: 0.75")
+        self._rvc_index_slider = QSlider(Qt.Horizontal)
+        self._rvc_index_slider.setRange(0, 100)
+        self._rvc_index_slider.setSingleStep(1)
+        self._rvc_index_slider.setValue(75)
+        self._rvc_index_slider.valueChanged.connect(self._on_rvc_config_changed)
+        index_row.addWidget(self._rvc_index_label)
+        index_row.addWidget(self._rvc_index_slider)
+        rvc_layout.addLayout(index_row)
+
+        protect_row = QHBoxLayout()
+        self._rvc_protect_label = QLabel("Protect: 0.33")
+        self._rvc_protect_slider = QSlider(Qt.Horizontal)
+        self._rvc_protect_slider.setRange(0, 50)
+        self._rvc_protect_slider.setSingleStep(1)
+        self._rvc_protect_slider.setValue(33)
+        self._rvc_protect_slider.valueChanged.connect(self._on_rvc_config_changed)
+        protect_row.addWidget(self._rvc_protect_label)
+        protect_row.addWidget(self._rvc_protect_slider)
+        rvc_layout.addLayout(protect_row)
+
+        rms_row = QHBoxLayout()
+        self._rvc_rms_label = QLabel("RMS Mix Rate: 0.25")
+        self._rvc_rms_slider = QSlider(Qt.Horizontal)
+        self._rvc_rms_slider.setRange(0, 100)
+        self._rvc_rms_slider.setSingleStep(1)
+        self._rvc_rms_slider.setValue(25)
+        self._rvc_rms_slider.valueChanged.connect(self._on_rvc_config_changed)
+        rms_row.addWidget(self._rvc_rms_label)
+        rms_row.addWidget(self._rvc_rms_slider)
+        rvc_layout.addLayout(rms_row)
+        layout.addWidget(self._rvc_group)
+
         # --- Runtime status ---
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout(status_group)
@@ -129,11 +184,87 @@ class MainWindow(QMainWindow):
             else None
         )
 
+    def _rvc_engine(self):
+        """Return the shared RVC engine without creating runtime resources."""
+        if self._context is None:
+            return None
+        direct_engine = getattr(self._context, "rvc_engine", None)
+        runtime = getattr(self._context, "rvc_runtime", None)
+        if runtime is not None and runtime.state.engine is not None:
+            return runtime.state.engine
+        if direct_engine is not None:
+            return direct_engine
+        effect_manager = self._effect_manager()
+        if effect_manager is None:
+            return None
+        ai_effect = effect_manager.get_by_name("AIVoiceEffect")
+        return getattr(ai_effect, "engine", None) if ai_effect is not None else None
+
+    def _sync_rvc_controls(self) -> None:
+        """Refresh advanced controls from the current immutable config."""
+        engine = self._rvc_engine()
+        config = getattr(engine, "config", None) if engine is not None else None
+        available = config is not None and callable(getattr(engine, "update_config", None))
+        self._rvc_group.setEnabled(available)
+        if not available:
+            self._rvc_status_label.setText("RVC engine unavailable")
+            return
+
+        controls = (
+            (self._rvc_pitch_slider, int(config.pitch_shift)),
+            (self._rvc_index_slider, round(config.index_rate * 100)),
+            (self._rvc_protect_slider, round(config.protect * 100)),
+            (self._rvc_rms_slider, round(config.rms_mix_rate * 100)),
+        )
+        for slider, value in controls:
+            slider.blockSignals(True)
+            slider.setValue(value)
+            slider.blockSignals(False)
+        self._update_rvc_labels()
+        self._rvc_status_label.setText("Runtime updates apply to the next inference")
+
+    def _update_rvc_labels(self) -> None:
+        pitch = self._rvc_pitch_slider.value()
+        self._rvc_pitch_label.setText(f"Pitch: {pitch:+d}")
+        self._rvc_index_label.setText(
+            f"Index Rate: {self._rvc_index_slider.value() / 100.0:.2f}"
+        )
+        self._rvc_protect_label.setText(
+            f"Protect: {self._rvc_protect_slider.value() / 100.0:.2f}"
+        )
+        self._rvc_rms_label.setText(
+            f"RMS Mix Rate: {self._rvc_rms_slider.value() / 100.0:.2f}"
+        )
+
+    def _on_rvc_config_changed(self, _value: int) -> None:
+        """Apply slider values to the existing engine without reloading it."""
+        self._update_rvc_labels()
+        engine = self._rvc_engine()
+        if engine is None or not callable(getattr(engine, "update_config", None)):
+            logger.warning("GUI RVC config change ignored: engine unavailable")
+            self._rvc_group.setEnabled(False)
+            return
+        try:
+            engine.update_config(
+                pitch_shift=self._rvc_pitch_slider.value(),
+                index_rate=self._rvc_index_slider.value() / 100.0,
+                protect=self._rvc_protect_slider.value() / 100.0,
+                rms_mix_rate=self._rvc_rms_slider.value() / 100.0,
+            )
+        except Exception as exc:
+            logger.error("GUI RVC config update failed: {}", exc)
+            self.statusBar().showMessage(f"RVC config update failed: {exc}")
+            self._sync_rvc_controls()
+            return
+        self._rvc_status_label.setText("Runtime config updated")
+        self.statusBar().showMessage("RVC runtime config updated")
+
     def _update_effects_display(self) -> None:
         """Read every displayed state from the shared EffectManager."""
         effect_manager = self._effect_manager()
         if effect_manager is None:
             self._effects_label.setText("Effects: (N/A)")
+            self._sync_rvc_controls()
             return
 
         lines = [
@@ -152,6 +283,7 @@ class MainWindow(QMainWindow):
             self._gain_slider.setValue(slider_value)
             self._gain_slider.blockSignals(False)
             self._gain_label.setText(f"Gain: {gain_effect.gain:.1f}")
+        self._sync_rvc_controls()
 
     def _toggle_effect(self, effect_name: str) -> None:
         """Toggle the effect instance owned by the shared EffectManager."""
@@ -318,6 +450,7 @@ class MainWindow(QMainWindow):
         )
         audio_lines.append(f"AI model: {'Ready' if ai_ready else 'Not loaded'}")
         self._status_label.setText("\n".join(audio_lines))
+        self._ai_voice_panel.update_status()
 
     def _start_audio(self) -> None:
         """Start the current audio stream via AppContext."""

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 """全局配置"""
 
 # ---- 音频参数 ----
@@ -32,7 +34,7 @@ ROBOT_FREQUENCY: int = 80                  # 机器人音效频率 (Hz)
 
 # ---- AI 变声 ----
 ENABLE_AI_VOICE: bool = True
-RVC_CHUNK_SIZE: int = SAMPLE_RATE
+RVC_CHUNK_SIZE: int = SAMPLE_RATE // 2
 RVC_INPUT_QUEUE_SIZE: int = 2
 RVC_WARMUP_ENABLED: bool = True
 RVC_WARMUP_TIMEOUT: float = 120.0
@@ -43,9 +45,13 @@ RVC_INDEX_RATE: float = 0.75         # index matching rate (0.0 - 1.0)
 RVC_RMS_MIX_RATE: float = 0.25       # RMS envelope mix rate
 RVC_PROTECT: float = 0.33            # consonant protection (0.0 - 0.5)
 
+PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+RVC_MODEL_LIBRARY_DIR: str = str(PROJECT_ROOT / "models" / "rvc")
+RVC_DEFAULT_MODEL: str = "modelF"
+
 # RVC source code root (independent, managed separately)
 RVC_SOURCE_DIR: str = r"D:\Project_all\rvc_core_test\rvc_source"
 # RVC models root (hubert, rmvpe, voices)
 RVC_MODELS_DIR: str = r"D:\Project_all\rvc_core_test\models"
 # RVC voice directory (contains .pth + .index files)
-RVC_VOICE_DIR: str = r"D:\Project_all\rvc_core_test\models\voices"
+RVC_VOICE_DIR: str = str(Path(RVC_MODEL_LIBRARY_DIR) / RVC_DEFAULT_MODEL)

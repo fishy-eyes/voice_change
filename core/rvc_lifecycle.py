@@ -9,6 +9,7 @@ from typing import Callable, Optional
 from loguru import logger
 
 from ai.rvc_engine import RVCEngine
+from config.rvc_profiles import RVCModelProfile, load_rvc_profile
 from effects.ai_voice import AIVoiceEffect
 from config.settings import (
     ENABLE_AI_VOICE,
@@ -78,6 +79,7 @@ def initialize_rvc_application(
     index_rate: float = RVC_INDEX_RATE,
     rms_mix_rate: float = RVC_RMS_MIX_RATE,
     protect: float = RVC_PROTECT,
+    profile: RVCModelProfile | str | Path | None = None,
     engine_factory: Callable[..., RVCEngine] = RVCEngine,
     effect_factory: Callable[..., AIVoiceEffect] = AIVoiceEffect,
     validate_paths: bool = True,
@@ -94,20 +96,44 @@ def initialize_rvc_application(
         return state
 
     try:
+        selected_profile = (
+            profile
+            if isinstance(profile, RVCModelProfile) or profile is None
+            else load_rvc_profile(profile)
+        )
+        if selected_profile is not None:
+            voice_dir = selected_profile.resolve_voice_dir(models_dir)
+            logger.info("Using RVC model profile: {}", selected_profile.name)
+
         if validate_paths:
             _validate_paths(voice_dir, source_dir, models_dir)
 
-        state.engine = engine_factory(
-            voice_dir=voice_dir,
-            source_dir=source_dir,
-            models_dir=models_dir,
-            pitch_shift=pitch_shift,
-            f0_method=f0_method,
-            index_rate=index_rate,
-            rms_mix_rate=rms_mix_rate,
-            protect=protect,
-            sample_rate=sample_rate,
-        )
+        engine_kwargs = {
+            "voice_dir": voice_dir,
+            "source_dir": source_dir,
+            "models_dir": models_dir,
+            "pitch_shift": pitch_shift,
+            "f0_method": f0_method,
+            "index_rate": index_rate,
+            "rms_mix_rate": rms_mix_rate,
+            "protect": protect,
+            "sample_rate": sample_rate,
+        }
+        if selected_profile is not None:
+            engine_kwargs.update(
+                config=selected_profile.inference,
+                voice_pth_path=selected_profile.model_file,
+                index_path=selected_profile.index_file,
+            )
+        if selected_profile is not None and engine_factory is RVCEngine:
+            state.engine = RVCEngine.from_profile(
+                selected_profile,
+                source_dir=source_dir,
+                models_dir=models_dir,
+                sample_rate=sample_rate,
+            )
+        else:
+            state.engine = engine_factory(**engine_kwargs)
         state.engine.load_model()
 
         state.effect = effect_factory(

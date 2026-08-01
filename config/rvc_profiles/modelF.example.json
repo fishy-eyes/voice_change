@@ -1,0 +1,13 @@
+{
+  "name": "modelF",
+  "voice_dir": "voices/modelF",
+  "model_file": "zhoujie.pth",
+  "index_file": "added_IVF5660_Flat_nprobe_1.index",
+  "inference": {
+    "pitch_shift": 12,
+    "f0_method": "rmvpe",
+    "index_rate": 0.3,
+    "rms_mix_rate": 0.25,
+    "protect": 0.33
+  }
+}
