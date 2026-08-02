@@ -181,7 +181,10 @@ class CustomizationDialog(QDialog):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         model_name = getattr(self.descriptor, "name", "RVC")
-        self.model_label = QLabel(f"模型 / Model: {model_name}")
+        model_folder = self._model_folder_name()
+        self.model_label = QLabel(
+            f"模型 / Model: {model_name}　|　文件夹 / Folder: {model_folder}"
+        )
         self.model_label.setStyleSheet("font-weight: 600; font-size: 15px;")
         root.addWidget(self.model_label)
 
@@ -292,7 +295,8 @@ class CustomizationDialog(QDialog):
         for row, (label, control) in enumerate(rows):
             manual_layout.addWidget(QLabel(label), row, 0)
             manual_layout.addWidget(control, row, 1)
-        self.profile_name = QLineEdit("我的日常配置")
+        self.profile_name = QLineEdit(self._default_profile_name())
+        self.profile_name.setToolTip("默认包含模型文件夹名，便于区分不同模型的配置。")
         manual_layout.addWidget(QLabel("配置名称"), len(rows), 0)
         manual_layout.addWidget(self.profile_name, len(rows), 1)
         profile_buttons = QHBoxLayout()
@@ -300,6 +304,9 @@ class CustomizationDialog(QDialog):
         self.apply_button.clicked.connect(self._apply_parameters)
         self.save_profile_button = QPushButton("保存 JSON 配置")
         self.save_profile_button.clicked.connect(self._save_profile)
+        self.save_profile_button.setToolTip(
+            f"默认文件名：{self._default_profile_filename()}"
+        )
         self.load_profile_button = QPushButton("加载 JSON 配置")
         self.load_profile_button.clicked.connect(self._load_profile)
         self.apply_button.setEnabled(False)
@@ -324,6 +331,31 @@ class CustomizationDialog(QDialog):
         spin.setSingleStep(0.05)
         spin.setDecimals(2)
         return spin
+
+    def _model_folder_name(self) -> str:
+        pth_path = getattr(self.descriptor, "pth_path", None)
+        pth_directory = Path(pth_path).parent if pth_path else None
+        for value in (getattr(self.descriptor, "directory", None), pth_directory):
+            if value is not None:
+                name = Path(value).name.strip()
+                if name:
+                    return name
+        return str(getattr(self.descriptor, "name", "RVC")).strip() or "RVC"
+
+    @staticmethod
+    def _safe_filename_component(value: str) -> str:
+        blocked = '<>:"/\\|?*'
+        cleaned = "".join(
+            "_" if char in blocked or ord(char) < 32 else char for char in str(value)
+        )
+        return cleaned.strip(" .") or "rvc_model"
+
+    def _default_profile_name(self) -> str:
+        return f"{self._model_folder_name()} - 我的日常配置"
+
+    def _default_profile_filename(self) -> str:
+        folder = self._safe_filename_component(self._model_folder_name())
+        return f"{folder}_voice_profile.json"
 
     def _prepare_current_stage(self, prefix: str | None = None) -> None:
         if self._search is None:
@@ -701,7 +733,7 @@ class CustomizationDialog(QDialog):
                     summary[round_.stage] = round_.selected.to_profile_dict()
         device_name = DeviceManager.get_device_name(getattr(self.context, "input_device", None))
         return CustomizationProfile(
-            profile_name=self.profile_name.text().strip() or "我的配置",
+            profile_name=self.profile_name.text().strip() or self._default_profile_name(),
             model=self._inspection,
             input_device_name=device_name,
             input_sample_rate=self.sample_rate,
@@ -724,7 +756,7 @@ class CustomizationDialog(QDialog):
         path, _selected = QFileDialog.getSaveFileName(
             self,
             "保存定制配置",
-            str(default_directory / "voice_profile.json"),
+            str(default_directory / self._default_profile_filename()),
             "JSON (*.json)",
         )
         if path:

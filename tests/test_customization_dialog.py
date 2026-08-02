@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from types import SimpleNamespace
 
 import numpy as np
@@ -26,17 +27,20 @@ class CustomizationDialogTests(unittest.TestCase):
     def test_quality_gate_and_sequential_parameter_selection_flow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            pth = root / "voice.pth"
+            model_directory = root / "voice_model_A"
+            model_directory.mkdir()
+            pth = model_directory / "voice.pth"
             pth.write_bytes(b"fake")
-            index_path = root / "voice.index"
+            index_path = model_directory / "voice.index"
             index_path.write_bytes(b"fake-index")
             descriptor = SimpleNamespace(
                 name="voice",
                 pth_path=pth,
+                directory=model_directory,
                 index_path=index_path,
                 profile=RVCModelProfile(
                     name="voice",
-                    voice_dir=root,
+                    voice_dir=model_directory,
                     model_file=pth,
                     inference=RVCInferenceConfig(index_rate=0.60),
                 ),
@@ -49,6 +53,23 @@ class CustomizationDialogTests(unittest.TestCase):
             dialog = CustomizationDialog(context, descriptor)
             try:
                 sample_rate = 16000
+                self.assertEqual(dialog._model_folder_name(), "voice_model_A")
+                self.assertEqual(
+                    dialog.profile_name.text(), "voice_model_A - 我的日常配置"
+                )
+                self.assertEqual(
+                    dialog._default_profile_filename(),
+                    "voice_model_A_voice_profile.json",
+                )
+                self.assertEqual(
+                    dialog._safe_filename_component('model: A?'),
+                    "model_ A_",
+                )
+                self.assertIn("模型文件夹名", dialog.profile_name.toolTip())
+                self.assertIn(
+                    "voice_model_A_voice_profile.json",
+                    dialog.save_profile_button.toolTip(),
+                )
                 t = np.arange(sample_rate * 6, dtype=np.float32) / sample_rate
                 gate = ((t % 1.0) < 0.75).astype(np.float32)
                 dialog._audio = (0.2 * np.sin(2 * np.pi * 170 * t) * gate).astype(
@@ -112,6 +133,16 @@ class CustomizationDialogTests(unittest.TestCase):
                 self.assertEqual(dialog.pitch_spin.value(), 0)
                 self.assertTrue(dialog.apply_button.isEnabled())
                 self.assertTrue(dialog.save_profile_button.isEnabled())
+                dialog._inspection = SimpleNamespace(model_hash="test-hash")
+                with patch(
+                    "gui.customization_dialog.QFileDialog.getSaveFileName",
+                    return_value=("", ""),
+                ) as chooser:
+                    dialog._save_profile()
+                default_path = chooser.call_args.args[2]
+                self.assertEqual(
+                    Path(default_path).name, "voice_model_A_voice_profile.json"
+                )
             finally:
                 dialog.done(QDialog.DialogCode.Rejected)
 

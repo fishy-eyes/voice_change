@@ -1,4 +1,7 @@
 # Verified runtime environment
+# Install: python -m pip install -r requirements.txt
+# Conda:   conda env create -f environment.yml
+# Tests:   python -m pip install -r requirements-dev.txt
 # OS: Windows 10/11 x64
 # Python: 3.11.15 (Anaconda)
 # GPU runtime: NVIDIA CUDA 12.1 (recommended for real-time RVC)

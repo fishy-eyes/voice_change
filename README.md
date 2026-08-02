@@ -7,6 +7,9 @@ Windows 实时 AI 变声器。程序使用 PySide6 提供桌面界面，以 `sou
 ```text
 voice_change/
 ├── main.py                          # 程序入口与顶层资源生命周期
+├── environment.yml                  # Conda 环境入口（Python 3.11 + pip 依赖）
+├── requirements.txt                 # 运行依赖与已验证版本
+├── requirements-dev.txt             # 测试依赖
 ├── ai/
 │   ├── rvc_engine.py                # RVC 模型、HuBERT、Pipeline 与推理配置
 │   ├── rvc_worker.py                # 独立线程中的异步 RVC 推理
@@ -28,6 +31,16 @@ voice_change/
 │   ├── rvc_runtime.py               # 模型加载、切换、启用和实时模式更新
 │   ├── rvc_lifecycle.py             # Engine、Worker 和缓存生命周期
 │   └── device_switching.py          # 运行时安全切换音频设备
+├── customization/
+│   ├── recording_session.py          # 固定文本录音、WAV 导入与完整录音管理
+│   ├── quality_checker.py            # 静音、削波、响度、F0 与噪声质量门
+│   ├── voice_analyzer.py             # 用户声音统计分析
+│   ├── model_inspector.py            # 模型哈希、版本和 index 可用性检查
+│   ├── parameter_search.py           # 分层、单参数搜索状态机
+│   ├── candidate_generator.py        # 后台离线 RVC 候选生成与响度匹配
+│   ├── candidate_evaluator.py        # 候选技术损坏筛选
+│   ├── profile_store.py              # 定制 JSON 配置保存、加载与降级
+│   └── schemas.py                    # 定制流程结构化数据类型
 ├── effects/
 │   ├── manager.py                   # 有序效果链
 │   ├── ai_voice.py                  # RVC 分块、队列、重叠和拼接适配器
@@ -37,9 +50,11 @@ voice_change/
 ├── gui/
 │   ├── main_window.py               # 横向双列主窗口与高级参数面板
 │   ├── rvc_control_panel.py         # AI 开关、模型导入和实时模式选择
+│   ├── customization_dialog.py       # 智能音色适配、完整候选试听和配置保存
 │   ├── self_monitor_panel.py        # 自监听设备与音量控制
 │   └── i18n.py                      # English/中文界面文本
 ├── models/rvc/                      # 项目内模型 profile；二进制不进入 Git
+├── config/customization_profiles/   # 本机定制配置；默认不进入 Git
 └── tests/                           # 单元、集成、真实模型和 benchmark 测试
 ```
 
@@ -76,6 +91,27 @@ Microphone
 - **RMS envelope mixing**：以 RMS Mix Rate 控制输出响度包络对输入响度的跟随程度。
 - **Protect**：保护清辅音、气息等低能量区域，降低过度转换造成的音素损坏。
 
+### 智能音色适配
+
+智能适配复用已经加载的 `RVCEngine` 做离线候选推理，但不改变实时音频链。生成候选时程序会暂停实时 `AudioStream`、等待 Worker 结束当前推理并清空队列；任务结束后恢复原始引擎参数和原音频流状态。
+
+搜索严格逐项进行，用户每次选择后锁定已有结果，再进入下一项，不执行参数笛卡尔积：
+
+1. **Pitch 粗搜索**：比较 `-12/-8/-4/0/+4/+8/+12`。
+2. **Pitch 精搜索**：围绕粗搜索结果比较 `-2/0/+2` 半音偏移，最终范围限制在 `-24～+24`。
+3. **Index Rate**：有可加载 `.index` 时比较 `0.35/0.60/0.80`；没有有效 index 时自动跳过并固定为 `0`。
+4. **Protect**：比较辅音保护强、平衡、目标音色优先三档。当前 RVC 实现中数值越小，原始清辅音特征保护越强。
+5. **RMS Mix Rate**：比较保留原声动态、平衡、输出更稳定三档。
+
+每个候选都会转换用户本次朗读的**完整录音**。为降低“更响听起来更好”的试听偏见，写入候选 WAV 前只匹配整体 RMS：
+
+- 各候选具有接近的总体响度；
+- 句内强弱、呼吸和包络差异仍然保留，可继续判断 RMS Mix Rate；
+- 自动技术评分不因候选更响而加分，音量只用于拒绝静音、极端增益和严重削波；
+- 自动评分只排除技术损坏，最终音色偏好由用户试听决定。
+
+录音进入搜索前会检查时长、有效语音、静音比例、RMS、削波、动态范围、F0 有效性、F0 跳变和背景噪声。配置保存时记录模型 SHA-256、index 路径、输入设备、声音分析结果、逐轮选择与最终参数；加载时发现模型哈希变化或 index 丢失会给出警告并安全降级。
+
 ### 实时连续性与性能
 
 - **异步生产者/消费者队列**：音频回调生产窗口，Worker 消费并推理，避免 GPU 推理阻塞 PortAudio。
@@ -91,18 +127,42 @@ Microphone
 - **Robot**：使用固定频率调制输入信号，产生机器人音色。
 - **Self Monitor**：把完整效果链的输出复制到独立监听队列；监听异常不会影响 VB-CABLE 主输出。
 
-## 怎样启用
+## 环境配置与使用方法
 
-### 1. 安装环境
+### 1. 创建环境并安装依赖
 
-使用 Windows、Python 3.11 和支持 CUDA 12.1 的 NVIDIA 驱动，安装项目依赖：
+已验证环境为 Windows 10/11 x64、Python 3.11.15、PyTorch 2.1.2 + CUDA 12.1。实时 RVC 推荐 NVIDIA GPU；CPU 可以启动基础功能，但模型推理通常无法满足实时要求。
+
+环境文件用途：
+
+- `environment.yml`：创建名为 `voice_change` 的 Conda 环境，并自动安装运行依赖。
+- `requirements.txt`：运行 GUI、音频链和 RVC 推理所需的固定版本。
+- `requirements-dev.txt`：在运行依赖基础上增加 pytest，用于完整测试套件。
+
+推荐使用 Conda：
+
+```powershell
+cd D:\Project_all\voice_change
+conda env create -f environment.yml
+conda activate voice_change
+python -m pip check
+```
+
+如果环境已经存在，可直接使用 pip 同步运行依赖：
 
 ```powershell
 cd D:\Project_all\voice_change
 E:\Anaconda\envs\voice_change\python.exe -m pip install -r requirements.txt
+E:\Anaconda\envs\voice_change\python.exe -m pip check
 ```
 
-CPU 可以启动基础功能，但实时 RVC 推荐使用 NVIDIA GPU。实际验证的环境与依赖版本记录在 `requirements.txt`。
+需要开发和运行全部测试时，再安装：
+
+```powershell
+E:\Anaconda\envs\voice_change\python.exe -m pip install -r requirements-dev.txt
+```
+
+`requirements.txt` 默认从 PyTorch 官方 `cu121` 索引安装 CUDA wheel。CPU-only 环境应改装 PyTorch 官方 CPU wheel；不要同时保留 `+cu121` 固定版本。
 
 ### 2. 配置 RVC 后端
 
@@ -158,6 +218,26 @@ E:\Anaconda\envs\voice_change\python.exe main.py
 7. 如需从耳机听到处理后的声音，在 **Self Monitor** 中选择耳机、设置音量并启用。
 8. 使用 RVC Advanced 面板实时调节参数；滑条说明会显示向左或向右的声音变化。
 
+### 6. 使用智能音色适配
+
+1. 在 **AI Voice** 中加载目标 RVC 模型。
+2. 点击 **智能音色适配 / 定制微调**。
+3. 自然朗读界面固定文本约 15～25 秒，或导入一段 WAV。
+4. 点击 **检查录音质量**；未通过质量门时根据界面原因重新录制。
+5. 按按钮顺序生成并试听 Pitch 粗搜索、Pitch 精搜索、Index Rate、Protect、RMS Mix Rate 候选。
+6. 每轮只判断当前提示的听感重点并选择一个方案；播放按钮会播放完整朗读内容。
+7. 全部轮次完成后可在推荐参数区域微调，然后点击 **应用到实时变声**。
+8. 输入配置名称并点击 **保存 JSON 配置**。
+
+默认配置名称和文件名包含模型文件夹名。例如模型位于 `models/rvc/modelF/`：
+
+```text
+配置名称：modelF - 我的日常配置
+默认文件：config/customization_profiles/modelF_voice_profile.json
+```
+
+保存按钮提示会显示默认文件名。Windows 非法文件名字符会自动替换；配置仍可在保存对话框中重命名或选择其他目录。
+
 ## 功能介绍
 
 - Windows 麦克风、扬声器、耳机和 VB-CABLE 设备发现、选择与运行时切换。
@@ -171,3 +251,5 @@ E:\Anaconda\envs\voice_change\python.exe main.py
 - 横向双列 GUI，支持 English/中文即时切换，技术参数名保持英文。
 - 模型状态、音频流状态和处理耗时显示。
 - 模型 warmup、FAISS index 缓存、有限队列和有序资源清理。
+- 录音质量门、模型/index 检查及五阶段单参数智能适配。
+- 完整录音候选试听、响度公平处理和按模型文件夹命名的 JSON 配置。

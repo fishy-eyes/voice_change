@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Test runner used by tests/test_ai_voice.py and optional full-suite execution.
+pytest==8.3.5
