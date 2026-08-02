@@ -142,7 +142,7 @@ Microphone
 推荐使用 Conda：
 
 ```powershell
-cd D:\Project_all\voice_change
+# 在克隆后的 voice_change 项目根目录执行
 conda env create -f environment.yml
 conda activate voice_change
 python -m pip check
@@ -151,15 +151,14 @@ python -m pip check
 如果环境已经存在，可直接使用 pip 同步运行依赖：
 
 ```powershell
-cd D:\Project_all\voice_change
-E:\Anaconda\envs\voice_change\python.exe -m pip install -r requirements.txt
-E:\Anaconda\envs\voice_change\python.exe -m pip check
+python -m pip install -r requirements.txt
+python -m pip check
 ```
 
 需要开发和运行全部测试时，再安装：
 
 ```powershell
-E:\Anaconda\envs\voice_change\python.exe -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-dev.txt
 ```
 
 `requirements.txt` 默认从 PyTorch 官方 `cu121` 索引安装 CUDA wheel。CPU-only 环境应改装 PyTorch 官方 CPU wheel；不要同时保留 `+cu121` 固定版本。
@@ -169,8 +168,8 @@ E:\Anaconda\envs\voice_change\python.exe -m pip install -r requirements-dev.txt
 在 `config/settings.py` 中设置：
 
 ```python
-RVC_SOURCE_DIR = r"D:\path\to\rvc_source"
-RVC_MODELS_DIR = r"D:\path\to\backend_models"
+RVC_SOURCE_DIR = r"external\rvc_source"
+RVC_MODELS_DIR = r"external\rvc_models"
 ```
 
 `RVC_SOURCE_DIR` 必须指向兼容的外部 RVC 源码目录；`RVC_MODELS_DIR` 至少应包含：
@@ -203,8 +202,7 @@ RVC_DEFAULT_MODEL = "modelF"
 运行：
 
 ```powershell
-cd D:\Project_all\voice_change
-E:\Anaconda\envs\voice_change\python.exe main.py
+python main.py
 ```
 
 ### 5. 在界面中启用变声
