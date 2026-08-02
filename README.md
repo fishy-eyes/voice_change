@@ -10,6 +10,7 @@ voice_change/
 ├── environment.yml                  # Conda 环境入口（Python 3.11 + pip 依赖）
 ├── requirements.txt                 # 运行依赖与已验证版本
 ├── requirements-dev.txt             # 测试依赖
+├── requirements-build.txt           # Windows 可执行文件构建依赖
 ├── ai/
 │   ├── rvc_engine.py                # RVC 模型、HuBERT、Pipeline 与推理配置
 │   ├── rvc_worker.py                # 独立线程中的异步 RVC 推理
@@ -53,6 +54,7 @@ voice_change/
 │   ├── customization_dialog.py       # 智能音色适配、完整候选试听和配置保存
 │   ├── self_monitor_panel.py        # 自监听设备与音量控制
 │   └── i18n.py                      # English/中文界面文本
+├── packaging/                       # PyInstaller 配置、构建脚本与发布说明
 ├── models/rvc/                      # 项目内模型 profile；二进制不进入 Git
 ├── config/customization_profiles/   # 本机定制配置；默认不进入 Git
 └── tests/                           # 单元、集成、真实模型和 benchmark 测试
@@ -138,6 +140,7 @@ Microphone
 - `environment.yml`：创建名为 `voice_change` 的 Conda 环境，并自动安装运行依赖。
 - `requirements.txt`：运行 GUI、音频链和 RVC 推理所需的固定版本。
 - `requirements-dev.txt`：在运行依赖基础上增加 pytest，用于完整测试套件。
+- `requirements-build.txt`：在运行依赖基础上增加固定版本的 PyInstaller，用于生成 Windows Release。
 
 推荐使用 Conda：
 
@@ -235,6 +238,28 @@ python main.py
 ```
 
 保存按钮提示会显示默认文件名。Windows 非法文件名字符会自动替换；配置仍可在保存对话框中重命名或选择其他目录。
+
+### 7. 构建 Windows Release
+
+先准备兼容的 RVC 推理源码目录，然后安装构建依赖并运行脚本：
+
+```powershell
+python -m pip install -r requirements-build.txt
+powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1 `
+  -PythonExecutable python `
+  -RvcSourceDir path\to\rvc_source
+```
+
+构建结果位于 `dist/`：
+
+```text
+dist/
+├── VoiceChanger-v1.0.0/                  # 解压后的 onedir 应用
+├── voice_change-v1.0.0-windows-x64.tar.xz  # GitHub Release 压缩包
+└── voice_change-v1.0.0-windows-x64.tar.xz.sha256
+```
+
+公开发布包使用 Windows 自带 `tar -xJf voice_change-v1.0.0-windows-x64.tar.xz` 解压，包含应用运行时和 MIT 许可的 RVC 推理源码，但不重新分发 HuBERT、RMVPE、音色 `.pth` 或 `.index` 权重。用户应按照压缩包中的 `README.txt` 放置后端权重，并通过 GUI 导入音色模型。构建出的 EXE 未进行代码签名，Windows SmartScreen 可能显示提示。
 
 ## 功能介绍
 

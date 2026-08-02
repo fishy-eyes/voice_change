@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 import signal
+import sys
 import threading
 from typing import Callable, Optional
 
@@ -28,6 +30,7 @@ from config.settings import (
     RVC_USER_MODELS_FILE,
     RVC_DEFAULT_MODEL,
     RVC_MODEL_LIBRARY_DIR,
+    RVC_SOURCE_DIR,
     SHOW_DEVICE_LIST,
 )
 from core.context import AppContext
@@ -61,7 +64,7 @@ def _cli_loop(effect_manager: EffectManager, quit_fn=None) -> None:
     while not _stop_event.is_set():
         try:
             cmd = input("> ").strip().lower()
-        except EOFError:
+        except (EOFError, RuntimeError):
             break
         if cmd == "exit":
             logger.info("CLI: exit")
@@ -145,12 +148,41 @@ def _select_devices() -> tuple[Optional[int], Optional[int]]:
         if output_idx is not None:
             logger.info("using detected VB-CABLE output")
         else:
-            logger.warning("VB-CABLE not found; falling back to output selection")
-            output_idx = DeviceManager.select_output_device()
+            logger.warning("VB-CABLE not found; using the system default output")
+            output_idx = None
     else:
         input_idx = DeviceManager.select_input_device()
         output_idx = DeviceManager.select_output_device()
     return input_idx, output_idx
+
+
+def _run_release_smoke_test() -> None:
+    """Import bundled native/ML dependencies without loading model weights."""
+    source_dir = str(RVC_SOURCE_DIR)
+    if source_dir not in sys.path:
+        sys.path.insert(0, source_dir)
+
+    modules = (
+        "torch",
+        "torchaudio",
+        "transformers",
+        "faiss",
+        "librosa",
+        "parselmouth",
+        "infer.hubert",
+        "infer.module.models",
+        "infer.rmvpe",
+        "infer.vc.pipeline",
+    )
+    for module_name in modules:
+        logger.info("release smoke test importing {}", module_name)
+        importlib.import_module(module_name)
+        logger.info("release smoke test imported {}", module_name)
+    logger.info(
+        "release smoke test passed; imported {} modules from RVC source {}",
+        len(modules),
+        source_dir,
+    )
 
 
 def main() -> None:
@@ -159,6 +191,14 @@ def main() -> None:
 
     setup_logger()
     _stop_event.clear()
+    if "--release-smoke-test" in sys.argv:
+        try:
+            _run_release_smoke_test()
+        except Exception:
+            logger.exception("release smoke test failed")
+            raise SystemExit(1)
+        return
+
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 

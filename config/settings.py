@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 from config.rvc_realtime import (
@@ -55,14 +57,36 @@ RVC_INDEX_RATE: float = 0.75         # index matching rate (0.0 - 1.0)
 RVC_RMS_MIX_RATE: float = 0.25       # RMS envelope mix rate
 RVC_PROTECT: float = 0.33            # consonant protection (0.0 - 0.5)
 
-PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+def _application_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+PROJECT_ROOT: Path = _application_root()
+BUNDLE_ROOT: Path = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT)).resolve()
 RVC_MODEL_LIBRARY_DIR: str = str(PROJECT_ROOT / "models" / "rvc")
-RVC_DEFAULT_MODEL: str = "modelF"
+RVC_DEFAULT_MODEL: str = (
+    os.environ.get("VOICE_CHANGE_RVC_DEFAULT_MODEL", "modelF").strip() or "modelF"
+)
 RVC_USER_MODELS_FILE: str = str(PROJECT_ROOT / "config" / "user_models.json")
 
-# RVC source code root (independent, managed separately)
-RVC_SOURCE_DIR: str = r"D:\Project_all\rvc_core_test\rvc_source"
-# RVC models root (hubert, rmvpe, voices)
-RVC_MODELS_DIR: str = r"D:\Project_all\rvc_core_test\models"
+_DEVELOPMENT_RVC_ROOT = PROJECT_ROOT.parent / "rvc_core_test"
+_DEFAULT_RVC_SOURCE_DIR = (
+    BUNDLE_ROOT / "rvc_source"
+    if getattr(sys, "frozen", False)
+    else _DEVELOPMENT_RVC_ROOT / "rvc_source"
+)
+_DEFAULT_RVC_MODELS_DIR = (
+    PROJECT_ROOT / "rvc_models"
+    if getattr(sys, "frozen", False)
+    else _DEVELOPMENT_RVC_ROOT / "models"
+)
+RVC_SOURCE_DIR: str = os.environ.get(
+    "VOICE_CHANGE_RVC_SOURCE_DIR", str(_DEFAULT_RVC_SOURCE_DIR)
+)
+RVC_MODELS_DIR: str = os.environ.get(
+    "VOICE_CHANGE_RVC_MODELS_DIR", str(_DEFAULT_RVC_MODELS_DIR)
+)
 # RVC voice directory (contains .pth + .index files)
 RVC_VOICE_DIR: str = str(Path(RVC_MODEL_LIBRARY_DIR) / RVC_DEFAULT_MODEL)

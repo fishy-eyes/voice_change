@@ -1,10 +1,11 @@
 """日志工具 - 基于 loguru"""
 
 import sys
+from pathlib import Path
 
 from loguru import logger
 
-from config.settings import LOG_LEVEL, APP_NAME
+from config.settings import APP_NAME, LOG_LEVEL, PROJECT_ROOT
 
 _configured = False
 
@@ -16,13 +17,24 @@ def setup_logger() -> None:
         return
 
     logger.remove()                          # 移除默认 handler
+    log_format = (
+        "<green>{time:HH:mm:ss}</green> | "
+        "<level>{level:<7}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan> - "
+        "<level>{message}</level>"
+    )
+    if sys.stderr is not None:
+        logger.add(sys.stderr, level=LOG_LEVEL, format=log_format)
+
+    log_directory = Path(PROJECT_ROOT) / "logs"
+    log_directory.mkdir(parents=True, exist_ok=True)
     logger.add(
-        sys.stderr,
+        log_directory / "voice_change.log",
         level=LOG_LEVEL,
-        format="<green>{time:HH:mm:ss}</green> | "
-               "<level>{level:<7}</level> | "
-               "<cyan>{name}</cyan>:<cyan>{function}</cyan> - "
-               "<level>{message}</level>",
+        format=log_format,
+        rotation="10 MB",
+        retention=5,
+        encoding="utf-8",
     )
     logger.info("{} 日志系统已就绪", APP_NAME)
     _configured = True

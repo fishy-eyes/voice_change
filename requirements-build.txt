@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Reproducible Windows executable builder.
+pyinstaller==6.21.0
