@@ -44,6 +44,18 @@ class CandidateEvaluatorTests(unittest.TestCase):
         self.assertGreaterEqual(first.technical_quality, 0)
         self.assertLessEqual(first.technical_quality, 100)
 
+    def test_technical_ranking_does_not_reward_louder_candidates(self) -> None:
+        quiet = self.evaluator.evaluate(
+            self.normal, self.normal * 0.35, self.sample_rate
+        )
+        loud = self.evaluator.evaluate(
+            self.normal, self.normal * 0.90, self.sample_rate
+        )
+        self.assertTrue(quiet.is_valid, quiet.rejection_reasons)
+        self.assertTrue(loud.is_valid, loud.rejection_reasons)
+        self.assertNotEqual(quiet.volume_score, loud.volume_score)
+        self.assertEqual(quiet.technical_quality, loud.technical_quality)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

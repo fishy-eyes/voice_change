@@ -79,7 +79,9 @@ class CandidateEvaluator:
                 0.0,
                 min(
                     100.0,
-                    (volume_score + pitch_score + stability_score) / 3.0
+                    # Do not reward candidates merely for being louder.
+                    # Volume remains an extreme-value rejection guard.
+                    (pitch_score + stability_score) / 2.0
                     - features.clipping_ratio * 500.0,
                 ),
             )

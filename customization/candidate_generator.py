@@ -19,6 +19,28 @@ from customization.schemas import CandidateResult, RVCParameterSet
 ProgressCallback = Callable[[int, int, CandidateResult], None]
 
 
+def match_audition_level(reference: np.ndarray, candidate: np.ndarray) -> np.ndarray:
+    """Match overall RMS fairly while preserving each file's internal dynamics."""
+    source = np.asarray(reference, dtype=np.float32).reshape(-1)
+    output = np.asarray(candidate, dtype=np.float32).reshape(-1)
+    if not output.size or not np.all(np.isfinite(output)):
+        return output.copy()
+    source_rms = (
+        float(np.sqrt(np.mean(np.square(source, dtype=np.float64))))
+        if source.size
+        else 0.0
+    )
+    output_rms = float(np.sqrt(np.mean(np.square(output, dtype=np.float64))))
+    if source_rms <= 1e-8 or output_rms <= 1e-8:
+        return output.copy()
+    gain = float(np.clip(source_rms / output_rms, 0.25, 4.0))
+    matched = output * gain
+    peak = float(np.max(np.abs(matched)))
+    if peak > 0.98:
+        matched *= 0.98 / peak
+    return matched.astype(np.float32, copy=False)
+
+
 class CandidateGenerator:
     """Generate files synchronously; callers put this object in a worker thread."""
 
@@ -68,7 +90,8 @@ class CandidateGenerator:
                     evaluation = self.evaluator.evaluate(source, converted, self.sample_rate)
                     destination = self.output_directory / f"candidate_{index + 1:02d}.wav"
                     if converted.size and np.all(np.isfinite(converted)):
-                        sf.write(destination, converted, self.sample_rate, subtype="PCM_16")
+                        audition_audio = match_audition_level(source, converted)
+                        sf.write(destination, audition_audio, self.sample_rate, subtype="PCM_16")
                         audio_path: str | None = str(destination)
                     else:
                         audio_path = None

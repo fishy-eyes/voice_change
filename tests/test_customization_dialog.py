@@ -23,20 +23,22 @@ class CustomizationDialogTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_quality_gate_and_pitch_selection_flow(self) -> None:
+    def test_quality_gate_and_sequential_parameter_selection_flow(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             pth = root / "voice.pth"
             pth.write_bytes(b"fake")
+            index_path = root / "voice.index"
+            index_path.write_bytes(b"fake-index")
             descriptor = SimpleNamespace(
                 name="voice",
                 pth_path=pth,
-                index_path=None,
+                index_path=index_path,
                 profile=RVCModelProfile(
                     name="voice",
                     voice_dir=root,
                     model_file=pth,
-                    inference=RVCInferenceConfig(index_rate=0.0),
+                    inference=RVCInferenceConfig(index_rate=0.60),
                 ),
             )
             context = SimpleNamespace(
@@ -57,34 +59,56 @@ class CustomizationDialogTests(unittest.TestCase):
                 self.assertTrue(dialog._quality.is_acceptable)
                 self.assertTrue(dialog.generate_button.isEnabled())
                 self.assertEqual(dialog._search.current.stage, "pitch_coarse")
-                self.assertFalse(dialog.index_spin.isEnabled())
+                self.assertTrue(dialog.index_spin.isEnabled())
+                self.assertEqual(len(dialog._candidate_audio()), len(dialog._audio))
+                self.assertTrue(np.array_equal(dialog._candidate_audio(), dialog._audio))
 
                 evaluation = CandidateEvaluation(90, 88, 92, 91, True)
-                coarse = CandidateResult(
-                    candidate_id="candidate-4",
-                    label="方案 D",
-                    parameters=dialog._search.current.candidates[3],
-                    audio_path=str(root / "coarse.wav"),
-                    inference_ms=10.0,
-                    evaluation=evaluation,
-                )
-                dialog._generated_stage = "pitch_coarse"
-                dialog._display_results = [coarse]
-                dialog._select_candidate(0)
+
+                def select_candidate(candidate_number: int, filename: str) -> None:
+                    index = candidate_number - 1
+                    stage = dialog._search.current.stage
+                    candidate = CandidateResult(
+                        candidate_id=f"candidate-{candidate_number}",
+                        label=f"方案 {candidate_number}",
+                        parameters=dialog._search.current.candidates[index],
+                        audio_path=str(root / filename),
+                        inference_ms=10.0,
+                        evaluation=evaluation,
+                    )
+                    dialog._generated_stage = stage
+                    dialog._display_results = [candidate]
+                    dialog._select_candidate(0)
+
+                select_candidate(4, "coarse.wav")
                 self.assertEqual(dialog._search.current.stage, "pitch_fine")
                 self.assertTrue(dialog.generate_button.isEnabled())
+                self.assertFalse(dialog.apply_button.isEnabled())
 
-                fine = CandidateResult(
-                    candidate_id="candidate-2",
-                    label="方案 B",
-                    parameters=dialog._search.current.candidates[1],
-                    audio_path=str(root / "fine.wav"),
-                    inference_ms=10.0,
-                    evaluation=evaluation,
+                select_candidate(2, "fine.wav")
+                self.assertEqual(dialog._search.current.stage, "index_rate")
+                self.assertIn("目标音色强度", dialog.generate_button.text())
+
+                select_candidate(2, "index.wav")
+                self.assertEqual(dialog._search.current.stage, "protect")
+                self.assertIn("辅音清晰度", dialog.generate_button.text())
+
+                select_candidate(2, "protect.wav")
+                self.assertEqual(dialog._search.current.stage, "rms_mix_rate")
+                self.assertIn("音量动态", dialog.generate_button.text())
+
+                select_candidate(2, "rms.wav")
+                self.assertIsNotNone(dialog._search.final_parameters)
+                self.assertEqual(
+                    [round_.stage for round_ in dialog._search.history],
+                    [
+                        "pitch_coarse",
+                        "pitch_fine",
+                        "index_rate",
+                        "protect",
+                        "rms_mix_rate",
+                    ],
                 )
-                dialog._generated_stage = "pitch_fine"
-                dialog._display_results = [fine]
-                dialog._select_candidate(0)
                 self.assertEqual(dialog.pitch_spin.value(), 0)
                 self.assertTrue(dialog.apply_button.isEnabled())
                 self.assertTrue(dialog.save_profile_button.isEnabled())

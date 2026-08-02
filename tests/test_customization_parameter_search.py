@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 import numpy as np
+import soundfile as sf
 
 from customization.candidate_generator import CandidateGenerator
 from customization.parameter_search import (
@@ -54,6 +55,34 @@ class ParameterSearchTests(unittest.TestCase):
         self.assertEqual(next_round.stage, "protect")
         self.assertTrue(all(item.index_rate == 0 for item in next_round.candidates))
 
+    def test_full_search_locks_previous_parameters_and_finishes_in_order(self) -> None:
+        search = ParameterSearch(has_index=True)
+
+        next_round = search.choose(4)
+        self.assertEqual(next_round.stage, "pitch_fine")
+        self.assertEqual([item.pitch_shift for item in next_round.candidates], [2, 4, 6])
+
+        next_round = search.choose(1)
+        self.assertEqual(next_round.stage, "index_rate")
+        self.assertTrue(all(item.pitch_shift == 4 for item in next_round.candidates))
+
+        next_round = search.choose(2)
+        self.assertEqual(next_round.stage, "protect")
+        self.assertTrue(all(item.index_rate == 0.80 for item in next_round.candidates))
+
+        next_round = search.choose(0)
+        self.assertEqual(next_round.stage, "rms_mix_rate")
+        self.assertTrue(all(item.protect == 0.0 for item in next_round.candidates))
+
+        self.assertIsNone(search.choose(1))
+        self.assertEqual(
+            [round_.stage for round_ in search.history],
+            ["pitch_coarse", "pitch_fine", "index_rate", "protect", "rms_mix_rate"],
+        )
+        self.assertEqual(
+            search.final_parameters, RVCParameterSet(4, "rmvpe", 0.80, 0.0, 0.50)
+        )
+
     def test_search_advances_and_can_cancel(self) -> None:
         search = ParameterSearch(has_index=True)
         next_round = search.choose(4)
@@ -77,6 +106,12 @@ class ParameterSearchTests(unittest.TestCase):
             self.assertEqual(len(results), 2)
             self.assertTrue(all(item.audio_path for item in results))
             self.assertEqual(engine.updates[-1], "original-config")
+            audition, written_rate = sf.read(results[0].audio_path, dtype="float32")
+            self.assertEqual(written_rate, sample_rate)
+            self.assertEqual(len(audition), len(audio))
+            source_rms = float(np.sqrt(np.mean(np.square(audio, dtype=np.float64))))
+            audition_rms = float(np.sqrt(np.mean(np.square(audition, dtype=np.float64))))
+            self.assertAlmostEqual(audition_rms, source_rms, delta=5e-4)
 
             cancelled = threading.Event()
             cancelled.set()

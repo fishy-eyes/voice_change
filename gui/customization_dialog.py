@@ -123,9 +123,23 @@ class CandidateTask(QObject):
 
 
 class CustomizationDialog(QDialog):
-    """A practical MVP: recording analysis, pitch A/B/C and profile saving."""
+    """Layered A/B/C customization with exactly one parameter changed per round."""
 
     PAGE_SIZE = 3
+    STAGE_TITLES = {
+        "pitch_coarse": "Pitch 粗搜索",
+        "pitch_fine": "Pitch 精搜索",
+        "index_rate": "目标音色强度",
+        "protect": "辅音清晰度",
+        "rms_mix_rate": "音量动态",
+    }
+    STAGE_GUIDANCE = {
+        "pitch_coarse": "先选择自然且接近目标音域的方案。",
+        "pitch_fine": "只比较音高细微差异，选择最自然的一项。",
+        "index_rate": "音高已锁定；只比较目标音色相似度与伪影。",
+        "protect": "前面参数已锁定；重点听辅音、齿音和吐字清晰度。",
+        "rms_mix_rate": "前面参数已锁定；重点听句内强弱、呼吸和音量动态。",
+    }
 
     def __init__(self, context, descriptor, *, language: str = "zh", parent=None) -> None:
         super().__init__(parent)
@@ -173,6 +187,7 @@ class CustomizationDialog(QDialog):
 
         instruction = QLabel(
             "请自然朗读下列固定文本约 15～25 秒；不合格录音不会进入候选生成。"
+            "每个候选都会转换并播放完整录音，因此生成时间会比短片段更长。"
         )
         instruction.setWordWrap(True)
         root.addWidget(instruction)
@@ -225,7 +240,7 @@ class CustomizationDialog(QDialog):
         self.progress_bar.setValue(0)
         root.addWidget(self.progress_bar)
 
-        candidate_group = QGroupBox("候选试听（每页最多三个，不显示底层参数）")
+        candidate_group = QGroupBox("完整录音候选试听（每页最多三个，不显示底层参数）")
         candidate_layout = QGridLayout(candidate_group)
         self._candidate_labels: list[QLabel] = []
         self._candidate_status: list[QLabel] = []
@@ -309,6 +324,24 @@ class CustomizationDialog(QDialog):
         spin.setSingleStep(0.05)
         spin.setDecimals(2)
         return spin
+
+    def _prepare_current_stage(self, prefix: str | None = None) -> None:
+        if self._search is None:
+            return
+        stage = self._search.current.stage
+        title = self.STAGE_TITLES[stage]
+        guidance = self.STAGE_GUIDANCE[stage]
+        self.generate_button.setText(f"生成 {title}候选")
+        self.generate_button.setEnabled(True)
+        message = f"{prefix} {guidance}" if prefix else guidance
+        self.quality_label.setText(
+            f"{message} 本轮只改变这一项；试听文件使用完整录音并已统一整体响度。"
+        )
+
+    def _candidate_audio(self) -> np.ndarray:
+        if self._audio is None:
+            return np.empty(0, dtype=np.float32)
+        return np.asarray(self._audio, dtype=np.float32).reshape(-1).copy()
 
     def _runtime(self):
         return getattr(self.context, "rvc_runtime", None)
@@ -417,11 +450,11 @@ class CustomizationDialog(QDialog):
             rms_mix_rate=profile.rms_mix_rate,
         )
         self._search = ParameterSearch(has_index=has_index, base=base)
+        self._final_parameters = None
         self.index_spin.setEnabled(has_index)
         if not has_index:
             self.index_spin.setValue(0.0)
-        self.generate_button.setText("生成 Pitch 粗搜索候选")
-        self.generate_button.setEnabled(True)
+        self._prepare_current_stage("录音检查通过。")
 
     @Slot()
     def _generate_current_round(self) -> None:
@@ -435,8 +468,7 @@ class CustomizationDialog(QDialog):
             QMessageBox.warning(self, "模型未加载", "请先在主窗口加载当前 RVC 模型。")
             return
 
-        segments = RecordingSession.split_search_segments(self._audio)
-        audio = segments["normal"]
+        audio = self._candidate_audio()
         self._pause_stream()
         self._cancellation = threading.Event()
         self._generated_stage = self._search.current.stage
@@ -482,6 +514,10 @@ class CustomizationDialog(QDialog):
     @Slot(object, object)
     def _on_candidates_ready(self, inspection, results) -> None:
         self._inspection = inspection
+        if self._search is not None:
+            self._search.has_index = bool(
+                inspection.has_index and inspection.index_loadable
+            )
         self._results = list(results)
         valid = [
             result
@@ -513,7 +549,8 @@ class CustomizationDialog(QDialog):
             self.quality_label.setText("合格候选过少，模型可能不适合当前录音；请重新录音或更换模型。")
         else:
             self.quality_label.setText(
-                f"候选生成完成：{len(valid)} 个可试听。自动评分仅用于技术筛选，音色偏好由你决定。"
+                f"候选生成完成：{len(valid)} 个完整录音可试听。候选已统一整体响度；"
+                "自动评分不奖励更响的方案，只用于技术损坏筛选，音色偏好由你决定。"
             )
 
     @Slot(str)
@@ -554,7 +591,7 @@ class CustomizationDialog(QDialog):
             evaluation = result.evaluation
             self._candidate_labels[row].setText(f"方案 {chr(65 + row)}")
             self._candidate_status[row].setText(
-                f"技术质量 {evaluation.technical_quality}；稳定程度 {evaluation.stability_score}"
+                f"技术质量 {evaluation.technical_quality}；稳定程度 {evaluation.stability_score}；已响度匹配"
             )
             self._play_buttons[row].setEnabled(bool(result.audio_path))
             self._select_buttons[row].setEnabled(True)
@@ -586,20 +623,33 @@ class CustomizationDialog(QDialog):
         if result is None or self._search is None:
             return
         candidate_index = int(result.candidate_id.rsplit("-", 1)[-1]) - 1
-        if self._generated_stage == "pitch_coarse":
-            self._search.choose(candidate_index)
-            self.generate_button.setText("生成 Pitch 精搜索候选")
-            self.generate_button.setEnabled(True)
-            self.quality_label.setText("已选择粗搜索方案。下一步将在其附近生成三个精细候选。")
-        elif self._generated_stage == "pitch_fine":
-            selected = self._search.current.select(candidate_index)
-            self._search.history.append(self._search.current)
+        if self._generated_stage != self._search.current.stage:
+            return
+        completed_title = self.STAGE_TITLES[self._generated_stage]
+        next_round = self._search.choose(candidate_index)
+        selected = self._search.history[-1].selected
+        if selected is not None:
             self._final_parameters = selected
             self._populate_manual(selected)
-            self.quality_label.setText("Pitch 搜索完成。可手动微调、试听后应用并保存配置。")
-            self.apply_button.setEnabled(True)
-            self.save_profile_button.setEnabled(True)
-            self.generate_button.setEnabled(False)
+        self._results = []
+        self._display_results = []
+        self._page = 0
+        self._clear_candidate_slots("等待下一轮生成")
+        if next_round is not None:
+            self.apply_button.setEnabled(False)
+            self.save_profile_button.setEnabled(False)
+            self._prepare_current_stage(f"已完成 {completed_title}。")
+            return
+
+        self._final_parameters = self._search.final_parameters
+        if self._final_parameters is not None:
+            self._populate_manual(self._final_parameters)
+        self.quality_label.setText(
+            "所有参数已按顺序完成独立适配。可手动微调、应用并保存配置。"
+        )
+        self.apply_button.setEnabled(True)
+        self.save_profile_button.setEnabled(True)
+        self.generate_button.setEnabled(False)
 
     def _populate_manual(self, parameters: RVCParameterSet) -> None:
         self.pitch_spin.setValue(parameters.pitch_shift)
