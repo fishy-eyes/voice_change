@@ -210,7 +210,7 @@ class MainWindow(QMainWindow):
         pitch_row = QHBoxLayout()
         self._rvc_pitch_label = QLabel()
         self._rvc_pitch_slider = QSlider(Qt.Horizontal)
-        self._rvc_pitch_slider.setRange(-12, 12)
+        self._rvc_pitch_slider.setRange(-24, 24)
         self._rvc_pitch_slider.setSingleStep(1)
         self._rvc_pitch_slider.setValue(0)
         self._rvc_pitch_slider.valueChanged.connect(self._on_rvc_config_changed)

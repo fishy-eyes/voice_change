@@ -25,6 +25,7 @@ from config.rvc_realtime import (
     RVC_REALTIME_PRESETS,
 )
 from gui.i18n import tr
+from gui.customization_dialog import CustomizationDialog
 
 
 class RVCControlPanel(QGroupBox):
@@ -65,6 +66,10 @@ class RVCControlPanel(QGroupBox):
         self.import_button = QPushButton()
         self.import_button.clicked.connect(self._import_model)
         model_buttons.addWidget(self.import_button)
+        self.customize_button = QPushButton()
+        self.customize_button.clicked.connect(self._open_customization)
+        self.customize_button.setEnabled(False)
+        model_buttons.addWidget(self.customize_button)
         layout.addLayout(model_buttons)
 
         realtime_row = QHBoxLayout()
@@ -106,6 +111,9 @@ class RVCControlPanel(QGroupBox):
         self.load_button.setText(self._t("ai.load"))
         self.import_button.setText(self._t("ai.import"))
         self.realtime_label.setText(self._t("ai.realtime"))
+        self.customize_button.setText(
+            "智能音色适配" if self._language == "zh" else "Smart Customization"
+        )
 
     def _runtime(self):
         return (
@@ -162,6 +170,7 @@ class RVCControlPanel(QGroupBox):
             self.import_button.setEnabled(False)
             self.enable_checkbox.setEnabled(False)
             self.status_label.setText(self._t("ai.runtime_unavailable"))
+            self.customize_button.setEnabled(False)
             return
 
         manager = getattr(runtime, "model_manager", None)
@@ -197,6 +206,7 @@ class RVCControlPanel(QGroupBox):
         runtime = self._runtime()
         if runtime is None:
             self.status_label.setText(self._t("ai.runtime_unavailable"))
+            self.customize_button.setEnabled(False)
             return
         descriptor = self._current_descriptor()
         state = runtime.state
@@ -218,6 +228,10 @@ class RVCControlPanel(QGroupBox):
         details = self._format_descriptor_status(descriptor)
         self.status_label.setText(
             heading if not details else f"{heading}\n{details}"
+        )
+
+        self.customize_button.setEnabled(
+            bool(state.ready and runtime.selected_model and descriptor is not None)
         )
 
     def _format_descriptor_status(self, descriptor) -> str:
@@ -306,6 +320,28 @@ class RVCControlPanel(QGroupBox):
             self.update_status()
             if self._on_changed is not None:
                 self._on_changed()
+
+    def _open_customization(self) -> None:
+        runtime = self._runtime()
+        if runtime is None or not runtime.state.ready or not runtime.selected_model:
+            self._show_warning("Please load an RVC model first.")
+            return
+        try:
+            descriptor = runtime.model_manager.get_model(runtime.selected_model)
+        except Exception as exc:
+            logger.error("GUI customization model lookup failed: {}", exc)
+            self._show_warning(str(exc))
+            return
+        dialog = CustomizationDialog(
+            self._context,
+            descriptor,
+            language=self._language,
+            parent=self,
+        )
+        dialog.exec()
+        self.update_status()
+        if self._on_changed is not None:
+            self._on_changed()
 
     def _import_model(self) -> None:
         runtime = self._runtime()

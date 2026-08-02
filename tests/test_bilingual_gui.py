@@ -31,6 +31,10 @@ class BilingualMainWindowTests(unittest.TestCase):
             self.assertEqual(window._language_button.text(), "中文")
             self.assertIn("lower voice", window._pitch_help_label.text())
             self.assertTrue(window._rvc_pitch_label.text().startswith("Pitch:"))
+            self.assertEqual(window._rvc_pitch_slider.minimum(), -24)
+            self.assertEqual(window._rvc_pitch_slider.maximum(), 24)
+            window._rvc_pitch_slider.setValue(14)
+            self.assertIn("+14", window._rvc_pitch_label.text())
             self.assertTrue(
                 window._rvc_index_label.text().startswith("Index Rate:")
             )

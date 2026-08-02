@@ -32,6 +32,9 @@ logs/
 *.bin
 *.safetensors
 
+# Machine-local voice customization profiles
+config/customization_profiles/*.json
+
 # Generated outputs
 output/
 outputs/
