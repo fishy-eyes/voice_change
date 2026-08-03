@@ -361,21 +361,9 @@ def run_diagnostic(
     input_info = _device_record(resolved_input, "input")
     output_info = _device_record(resolved_output, "output")
 
-    plain_manager = create_effect_manager(
-        gain_enabled=False,
-        echo_enabled=False,
-        robot_enabled=False,
-    )
+    plain_manager = create_effect_manager()
     monitor_tap = _MonitorTap()
-    routed_manager = create_effect_manager(
-        self_monitor=monitor_tap,
-        gain_enabled=False,
-        echo_enabled=False,
-        robot_enabled=False,
-    )
-    for manager in (plain_manager, routed_manager):
-        for effect in manager.effects:
-            effect.enabled = False
+    routed_manager = create_effect_manager(self_monitor=monitor_tap)
 
     state_holder: dict[str, _CaptureState | None] = {"state": None}
 

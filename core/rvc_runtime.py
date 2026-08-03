@@ -103,6 +103,8 @@ class RVCRuntime:
         with self._lock:
             try:
                 descriptor = self.model_manager.get_model(name)
+                # A valid retry must not inherit an earlier selection error.
+                self.state.error = None
             except Exception as exc:
                 if not self.state.ready:
                     self.state = RVCApplicationState(

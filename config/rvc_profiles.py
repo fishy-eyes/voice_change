@@ -14,7 +14,17 @@ _INFERENCE_FIELDS = frozenset(
     {"pitch_shift", "f0_method", "index_rate", "rms_mix_rate", "protect"}
 )
 _PROFILE_FIELDS = frozenset(
-    {"name", "voice_dir", "model_file", "index_file", "inference"}
+    {
+        "name",
+        "backend",
+        "description",
+        "sample_rate",
+        "supports_pitch",
+        "voice_dir",
+        "model_file",
+        "index_file",
+        "inference",
+    }
 )
 
 
@@ -87,6 +97,11 @@ class RVCModelProfile:
     model_file: Path | None = None
     index_file: Path | None = None
 
+    backend: str = "rvc"
+    description: str = ""
+    sample_rate: int | None = None
+    supports_pitch: bool = True
+
     def __post_init__(self) -> None:
         name = str(self.name).strip()
         if not name:
@@ -100,6 +115,17 @@ class RVCModelProfile:
             object.__setattr__(self, "model_file", Path(self.model_file))
         if self.index_file is not None:
             object.__setattr__(self, "index_file", Path(self.index_file))
+        backend = str(self.backend).strip().lower()
+        if backend != "rvc":
+            raise ValueError("RVC profile backend must be 'rvc'")
+        if self.sample_rate is not None:
+            if isinstance(self.sample_rate, bool) or int(self.sample_rate) <= 0:
+                raise ValueError("profile sample_rate must be positive")
+            object.__setattr__(self, "sample_rate", int(self.sample_rate))
+        if not isinstance(self.supports_pitch, bool):
+            raise TypeError("profile supports_pitch must be boolean")
+        object.__setattr__(self, "backend", backend)
+        object.__setattr__(self, "description", str(self.description).strip())
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "RVCModelProfile":
@@ -125,6 +151,14 @@ class RVCModelProfile:
                 else None
             ),
             inference=RVCInferenceConfig.from_mapping(inference_values),
+            backend=str(values.get("backend", "rvc")),
+            description=str(values.get("description", "")),
+            sample_rate=(
+                int(values["sample_rate"])
+                if values.get("sample_rate") is not None
+                else None
+            ),
+            supports_pitch=values.get("supports_pitch", True),
         )
 
     def resolve_voice_dir(self, models_dir: str | Path) -> Path:
@@ -155,6 +189,10 @@ class RVCModelProfile:
             "voice_dir": str(self.voice_dir),
             "model_file": str(self.model_file) if self.model_file is not None else None,
             "index_file": str(self.index_file) if self.index_file is not None else None,
+            "backend": self.backend,
+            "description": self.description,
+            "sample_rate": self.sample_rate,
+            "supports_pitch": self.supports_pitch,
             "inference": self.inference.to_dict(),
         }
 

@@ -370,6 +370,10 @@ class RVCModelManager:
             model_file=model_file,
             index_file=index_file,
             inference=stored.inference,
+            backend=stored.backend,
+            description=stored.description,
+            sample_rate=stored.sample_rate,
+            supports_pitch=stored.supports_pitch,
         )
         return RVCModelDescriptor(
             name=stored.name,

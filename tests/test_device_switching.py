@@ -84,10 +84,10 @@ def main() -> int:
     from core.context import AppContext
     from core.device_switching import stop_current_audio_stream, switch_audio_devices
     from effects.manager import EffectManager
-    from gui.main_window import MainWindow
+    from gui.device_settings_dialog import DeviceSettingsDialog
 
     app = QApplication.instance() or QApplication([])
-    window = None
+    dialog = None
     original_query = device_module.sd.query_devices
     try:
         print("\n[1/5] DeviceManager filters by channel direction", flush=True)
@@ -112,16 +112,16 @@ def main() -> int:
             input_device=2,
             output_device=7,
         )
-        window = MainWindow(context)
-        require(window._input_combo.currentData() == 2, "input combo selects current stream index")
-        require(window._output_combo.currentData() == 7, "output combo selects current stream index")
-        require(window._input_combo.itemData(2) == 4, "input item stores index as item data")
-        require(window._output_combo.itemData(2) == 9, "output item stores index as item data")
-        window._input_combo.setCurrentIndex(2)
-        window._output_combo.setCurrentIndex(2)
-        window._refresh_device_choices()
-        require(window._input_combo.currentData() == 4, "refresh preserves input selection")
-        require(window._output_combo.currentData() == 9, "refresh preserves output selection")
+        dialog = DeviceSettingsDialog(context)
+        require(dialog.input_combo.currentData() == 2, "input combo selects current stream index")
+        require(dialog.output_combo.currentData() == 7, "output combo selects current stream index")
+        require(dialog.input_combo.itemData(1) == 4, "input item stores index as item data")
+        require(dialog.output_combo.itemData(1) == 9, "output item stores index as item data")
+        dialog.input_combo.setCurrentIndex(1)
+        dialog.output_combo.setCurrentIndex(1)
+        dialog.refresh_devices()
+        require(dialog.input_combo.currentData() == 4, "refresh preserves input selection")
+        require(dialog.output_combo.currentData() == 9, "refresh preserves output selection")
         require(context.audio_stream is gui_stream, "refresh does not replace or start the stream")
 
         print("\n[3/5] Stopped and running stream switches", flush=True)
@@ -208,8 +208,8 @@ def main() -> int:
         return 1
     finally:
         device_module.sd.query_devices = original_query
-        if window is not None:
-            window.close()
+        if dialog is not None:
+            dialog.close()
         app.processEvents()
 
 

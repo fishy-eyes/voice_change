@@ -1,5 +1,9 @@
 {
   "name": "modelF",
+  "backend": "rvc",
+  "description": "Local RVC voice model",
+  "sample_rate": 40000,
+  "supports_pitch": true,
   "voice_dir": ".",
   "model_file": "modelF.pth",
   "index_file": "modelF.index",

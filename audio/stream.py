@@ -41,6 +41,8 @@ class AudioStream:
         self._last_proc_ms: float = 0.0
         self._total_proc_ms: float = 0.0
         self._max_proc_ms: float = 0.0
+        self._input_rms: float = 0.0
+        self._output_rms: float = 0.0
 
     # ------------------------------------------------------------------
     # effect manager
@@ -84,8 +86,8 @@ class AudioStream:
 
             # debug: log input volume periodically
             if self._callback_count % 400 == 1:
-                in_rms = float(np.sqrt(np.mean(indata ** 2)))
-                logger.debug("input RMS: {:.6f}  (count={})", in_rms, self._callback_count)
+                self._input_rms = float(np.sqrt(np.mean(indata ** 2)))
+                logger.debug("input RMS: {:.6f}  (count={})", self._input_rms, self._callback_count)
 
             # priority: effect_manager > process_func > passthrough
             t0 = time.perf_counter()
@@ -116,8 +118,8 @@ class AudioStream:
 
             # debug: log output volume periodically
             if self._callback_count % 400 == 1:
-                out_rms = float(np.sqrt(np.mean(outdata ** 2)))
-                logger.debug("output RMS: {:.6f}", out_rms)
+                self._output_rms = float(np.sqrt(np.mean(outdata ** 2)))
+                logger.debug("output RMS: {:.6f}", self._output_rms)
 
                 count = self._callback_count
                 avg_ms = self._total_proc_ms / count

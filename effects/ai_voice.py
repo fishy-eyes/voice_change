@@ -1,4 +1,4 @@
-"""Non-blocking RVC adapter for the real-time effect chain."""
+"""Non-blocking voice-conversion adapter for the real-time effect chain."""
 
 from __future__ import annotations
 
@@ -10,25 +10,25 @@ from typing import TYPE_CHECKING, Deque
 import numpy as np
 from loguru import logger
 
-from ai.rvc_worker import RVCWorker
+from ai.voice_worker import VoiceConversionWorker
 from config.settings import SAMPLE_RATE
 from effects.base import BaseEffect
 
 if TYPE_CHECKING:
-    from ai.rvc_engine import RVCEngine
+    from ai.voice_engine.base import VoiceConversionEngine
 
 
 class AIVoiceEffect(BaseEffect):
-    """Buffer callback audio and run RVC inference outside the callback.
+    """Buffer callback audio and run backend inference outside the callback.
 
-    Input blocks are collected into overlapping windows for a :class:`RVCWorker`.
+    Input blocks are collected into overlapping windows for a background worker.
     Completed windows are linearly crossfaded, buffered, and returned in slices
     matching each input callback block's shape.
     """
 
     def __init__(
         self,
-        engine: RVCEngine,
+        engine: VoiceConversionEngine,
         chunk_size: int = SAMPLE_RATE,
         overlap_size: int = 0,
         max_queue_size: int = 2,
@@ -43,12 +43,12 @@ class AIVoiceEffect(BaseEffect):
         if max_queue_size <= 0:
             raise ValueError("max_queue_size must be positive")
 
-        self._engine: RVCEngine = engine
+        self._engine: VoiceConversionEngine = engine
         self._chunk_size = int(chunk_size)
         self._overlap_size = int(overlap_size)
         self._max_queue_size = int(max_queue_size)
         self._max_output_samples = self._chunk_size * self._max_queue_size
-        self._worker = RVCWorker(
+        self._worker = VoiceConversionWorker(
             engine,
             chunk_size=self._chunk_size,
             max_queue_size=max_queue_size,
@@ -73,12 +73,12 @@ class AIVoiceEffect(BaseEffect):
         logger.debug("AIVoiceEffect created with engine: {}", engine)
 
     @property
-    def engine(self) -> RVCEngine:
-        """The externally owned RVC engine."""
+    def engine(self) -> VoiceConversionEngine:
+        """The externally owned voice-conversion engine."""
         return self._engine
 
     @property
-    def worker(self) -> RVCWorker:
+    def worker(self) -> VoiceConversionWorker:
         """The inference worker, exposed for metrics and lifecycle checks."""
         return self._worker
 

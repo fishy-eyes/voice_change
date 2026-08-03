@@ -70,8 +70,6 @@ Microphone
   -> OutputRoutingEffectManager
   -> AIVoiceEffect
   -> GainEffect
-  -> EchoEffect
-  -> RobotEffect
   -> Main output / VB-CABLE
   -> Optional Self Monitor / Headphones
 ```
@@ -80,9 +78,9 @@ Microphone
 
 默认 Balanced 模式使用 500 ms chunk 和 50 ms overlap。相邻推理窗口使用线性 crossfade 拼接，减少 chunk 边界突变。输入和输出队列均有容量上限，推理落后时不会让实时回调无限积压。
 
-启动时 `RVCModelManager` 合并扫描 `models/rvc/` 的内置模型和 `config/user_models.json` 中登记的外部模型。`RVCRuntime` 创建 Engine/Worker、加载所选模型并挂接 `AIVoiceEffect`；模型切换或程序退出时依次停止 Worker、卸载模型并释放 index cache。模型加载失败时，基础效果和非 AI 音频链仍可使用。
+启动时 `RVCModelManager` 合并扫描 `models/rvc/` 的内置模型和 `config/user_models.json` 中登记的外部模型。`VoiceConversionManager` 选择 Backend，`RVCRuntime` 创建 Engine/Worker、加载所选模型并挂接 `AIVoiceEffect`；模型切换或程序退出时依次停止 Worker、卸载模型并释放 index cache。模型加载失败时自动旁路 AI，最终 Output Gain 仍位于监听分流之前。
 
-界面更新 Pitch、Index Rate、Protect 和 RMS Mix Rate 时，只替换线程安全的推理配置快照，不会重新加载 `.pth`、`.index`、HuBERT、RMVPE 或重建 Pipeline。实时模式切换只安全更新分块缓冲和 Worker 的 chunk shape，不更换已加载模型。
+主窗口只保留 Backend/模型、音频、监听、Output Gain 和状态控制。RVC 专属设置窗口更新 Pitch、Index Rate、Protect 和 RMS Mix Rate 时，只替换线程安全的推理配置快照，不会重新加载 `.pth`、`.index`、HuBERT、RMVPE 或重建 Pipeline。实时模式切换只安全更新分块缓冲和 Worker 的 chunk shape，不更换已加载模型。
 
 ## 使用的算法
 

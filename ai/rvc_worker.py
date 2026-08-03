@@ -291,7 +291,12 @@ class RVCWorker:
             try:
                 self._inferencing.set()
                 infer_started = perf_counter()
-                result = self._engine.infer(audio)
+                process_audio = getattr(self._engine, "process_audio", None)
+                result = (
+                    process_audio(audio)
+                    if callable(process_audio)
+                    else self._engine.infer(audio)
+                )
                 self._infer_count += 1
                 infer_ms = (perf_counter() - infer_started) * 1000.0
                 self._last_infer_ms = infer_ms

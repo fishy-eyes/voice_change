@@ -713,11 +713,15 @@ class CustomizationDialog(QDialog):
     @Slot()
     def _apply_parameters(self) -> None:
         runtime = self._runtime()
-        engine = getattr(getattr(runtime, "state", None), "engine", None)
-        if engine is None:
+        manager = getattr(self.context, "voice_conversion_manager", None)
+        if runtime is None:
             return
         parameters = self._manual_parameters()
-        engine.update_config(**parameters.to_engine_changes())
+        if manager is not None:
+            manager.update_current_parameters(**parameters.to_engine_changes())
+        else:
+            engine = getattr(getattr(runtime, "state", None), "engine", None)
+            engine.update_config(**parameters.to_engine_changes())
         self._final_parameters = parameters
         logger.info("最终参数: {}", parameters)
         self.quality_label.setText("参数已应用；实时 Worker 将从下一次推理开始使用。")

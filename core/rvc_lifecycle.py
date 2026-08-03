@@ -8,7 +8,8 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from ai.rvc_engine import RVCEngine
+from ai.voice_engine.base import VoiceConversionEngine
+from ai.voice_engine.rvc import RVCVoiceEngine
 from config.rvc_profiles import RVCModelProfile, load_rvc_profile
 from effects.ai_voice import AIVoiceEffect
 from config.settings import (
@@ -36,7 +37,7 @@ class RVCApplicationState:
     """RVC resources owned by the application layer."""
 
     enabled: bool
-    engine: Optional[RVCEngine] = None
+    engine: Optional[VoiceConversionEngine] = None
     effect: Optional[AIVoiceEffect] = None
     ready: bool = False
     error: Optional[str] = None
@@ -82,7 +83,7 @@ def initialize_rvc_application(
     rms_mix_rate: float = RVC_RMS_MIX_RATE,
     protect: float = RVC_PROTECT,
     profile: RVCModelProfile | str | Path | None = None,
-    engine_factory: Callable[..., RVCEngine] = RVCEngine,
+    engine_factory: Callable[..., VoiceConversionEngine] = RVCVoiceEngine,
     effect_factory: Callable[..., AIVoiceEffect] = AIVoiceEffect,
     validate_paths: bool = True,
 ) -> RVCApplicationState:
@@ -127,8 +128,8 @@ def initialize_rvc_application(
                 voice_pth_path=selected_profile.model_file,
                 index_path=selected_profile.index_file,
             )
-        if selected_profile is not None and engine_factory is RVCEngine:
-            state.engine = RVCEngine.from_profile(
+        if selected_profile is not None and engine_factory is RVCVoiceEngine:
+            state.engine = RVCVoiceEngine.from_profile(
                 selected_profile,
                 source_dir=source_dir,
                 models_dir=models_dir,

@@ -3,5 +3,4 @@
 from effects.base import BaseEffect
 from effects.manager import EffectManager
 from effects.gain import GainEffect
-from effects.echo import EchoEffect
 from effects.ai_voice import AIVoiceEffect

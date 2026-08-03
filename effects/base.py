@@ -1,7 +1,7 @@
 """Unified audio effect interface.
 
-All effect modules (pitch, reverb, echo, robot, etc.) inherit from
-BaseEffect and implement the process() method.
+Realtime effect modules inherit from BaseEffect and implement the
+process() method.
 """
 
 from abc import ABC, abstractmethod
