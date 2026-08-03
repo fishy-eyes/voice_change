@@ -71,17 +71,12 @@ RVC_DEFAULT_MODEL: str = (
 )
 RVC_USER_MODELS_FILE: str = str(PROJECT_ROOT / "config" / "user_models.json")
 
-_DEVELOPMENT_RVC_ROOT = PROJECT_ROOT.parent / "rvc_core_test"
 _DEFAULT_RVC_SOURCE_DIR = (
     BUNDLE_ROOT / "rvc_source"
     if getattr(sys, "frozen", False)
-    else _DEVELOPMENT_RVC_ROOT / "rvc_source"
+    else PROJECT_ROOT / "rvc_source"
 )
-_DEFAULT_RVC_MODELS_DIR = (
-    PROJECT_ROOT / "rvc_models"
-    if getattr(sys, "frozen", False)
-    else _DEVELOPMENT_RVC_ROOT / "models"
-)
+_DEFAULT_RVC_MODELS_DIR = PROJECT_ROOT / "rvc_models"
 RVC_SOURCE_DIR: str = os.environ.get(
     "VOICE_CHANGE_RVC_SOURCE_DIR", str(_DEFAULT_RVC_SOURCE_DIR)
 )

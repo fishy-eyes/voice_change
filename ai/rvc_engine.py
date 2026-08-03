@@ -5,8 +5,7 @@ Responsible for:
 - GPU initialization
 - Inference interface
 
-Delegates to the RVC source tree in rvc_core_test/rvc_source which is
-managed separately and must NOT be copied into this project.
+Delegates to the MIT-licensed inference source vendored in ``rvc_source/``.
 """
 
 from __future__ import annotations

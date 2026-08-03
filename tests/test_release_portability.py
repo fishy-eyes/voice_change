@@ -23,10 +23,15 @@ class ReleasePortabilityTests(unittest.TestCase):
                 executable.resolve().parent,
             )
 
-    def test_source_defaults_are_computed_without_literal_machine_paths(self) -> None:
-        expected_root = settings.PROJECT_ROOT.parent / "rvc_core_test"
-        self.assertEqual(Path(settings.RVC_SOURCE_DIR), expected_root / "rvc_source")
-        self.assertEqual(Path(settings.RVC_MODELS_DIR), expected_root / "models")
+    def test_source_defaults_are_project_local_without_machine_paths(self) -> None:
+        self.assertEqual(
+            Path(settings.RVC_SOURCE_DIR),
+            settings.PROJECT_ROOT / "rvc_source",
+        )
+        self.assertEqual(
+            Path(settings.RVC_MODELS_DIR),
+            settings.PROJECT_ROOT / "rvc_models",
+        )
 
     @patch("main.DeviceManager.select_output_device")
     @patch("main.DeviceManager.find_virtual_output_device", return_value=None)

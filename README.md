@@ -55,6 +55,8 @@ voice_change/
 │   ├── self_monitor_panel.py        # 自监听设备与音量控制
 │   └── i18n.py                      # English/中文界面文本
 ├── packaging/                       # PyInstaller 配置、构建脚本与发布说明
+├── rvc_source/                      # 项目内 MIT RVC 推理源码
+├── rvc_models/                      # 本机 HuBERT/RMVPE 权重；不进入 Git
 ├── models/rvc/                      # 项目内模型 profile；二进制不进入 Git
 ├── config/customization_profiles/   # 本机定制配置；默认不进入 Git
 └── tests/                           # 单元、集成、真实模型和 benchmark 测试
@@ -168,23 +170,20 @@ python -m pip install -r requirements-dev.txt
 
 ### 2. 配置 RVC 后端
 
-在 `config/settings.py` 中设置：
-
-```python
-RVC_SOURCE_DIR = r"external\rvc_source"
-RVC_MODELS_DIR = r"external\rvc_models"
-```
-
-`RVC_SOURCE_DIR` 必须指向兼容的外部 RVC 源码目录；`RVC_MODELS_DIR` 至少应包含：
+项目默认直接使用以下本地目录，无需配置绝对路径：
 
 ```text
-backend_models/
+rvc_source/                      # RVC 推理源码
+rvc_models/
 ├── hubert/
 │   ├── config.json
 │   └── pytorch_model.bin
 └── rmvpe/
     └── rmvpe.pt
 ```
+
+如需临时使用其他位置，可设置 `VOICE_CHANGE_RVC_SOURCE_DIR` 和
+`VOICE_CHANGE_RVC_MODELS_DIR` 环境变量覆盖默认目录。
 
 ### 3. 准备声音模型
 
@@ -241,14 +240,15 @@ python main.py
 
 ### 7. 构建 Windows Release
 
-先准备兼容的 RVC 推理源码目录，然后安装构建依赖并运行脚本：
+安装构建依赖后运行脚本；默认使用项目内的 `rvc_source/`：
 
 ```powershell
 python -m pip install -r requirements-build.txt
 powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1 `
-  -PythonExecutable python `
-  -RvcSourceDir path\to\rvc_source
+  -PythonExecutable python
 ```
+
+如需使用其他兼容源码，可额外传入 `-RvcSourceDir path\to\rvc_source`。
 
 构建结果位于 `dist/`：
 

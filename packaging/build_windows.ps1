@@ -1,11 +1,13 @@
 param(
     [string]$PythonExecutable = "python",
-    [Parameter(Mandatory = $true)]
-    [string]$RvcSourceDir
+    [string]$RvcSourceDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($RvcSourceDir)) {
+    $RvcSourceDir = Join-Path $repoRoot "rvc_source"
+}
 $resolvedRvcSource = (Resolve-Path -LiteralPath $RvcSourceDir).Path
 $licensePath = Join-Path $resolvedRvcSource "LICENSE"
 if (-not (Test-Path -LiteralPath $licensePath -PathType Leaf)) {
