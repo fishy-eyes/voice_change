@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ai.beatrice.model import MODEL_API_VERSION
 from ai.voice_engine.beatrice import (
     DEFAULT_MAX_SOURCE_PITCH,
     DEFAULT_MIN_SOURCE_PITCH,
@@ -150,7 +151,11 @@ class BeatriceSettingsPanel(QWidget, BackendSettingsPanel):
                 details = status() if callable(status) else {}
                 if not details.get("available", False):
                     raise RuntimeError("Beatrice package was not found in this folder")
-                version = details.get("version", "2.0.0-rc.0")
+                version = (
+                    details.get("model_api_version")
+                    or details.get("version")
+                    or MODEL_API_VERSION
+                )
                 self.runtime_status_label.setText(
                     tr(
                         self._language,
@@ -213,8 +218,8 @@ class BeatriceSettingsPanel(QWidget, BackendSettingsPanel):
         model_name = getattr(descriptor, "model_name", None) or tr(
             self._language, "runtime.na"
         )
-        version = runtime.get("version") or getattr(
-            descriptor, "runtime_requirement", None
+        version = runtime.get("model_api_version") or runtime.get("version") or getattr(
+            descriptor, "model_api_version", None
         ) or tr(self._language, "runtime.na")
         count = getattr(descriptor, "speaker_count", 0)
         self.info_label.setText(
@@ -259,7 +264,11 @@ class BeatriceSettingsPanel(QWidget, BackendSettingsPanel):
             tr(
                 self._language,
                 "beatrice.runtime_available_version",
-                version=details.get("version", "2.0.0-rc.0"),
+                version=(
+                    details.get("model_api_version")
+                    or details.get("version")
+                    or MODEL_API_VERSION
+                ),
             )
         )
 

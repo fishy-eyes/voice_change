@@ -9,7 +9,7 @@ from typing import Optional
 
 from loguru import logger
 
-from ai.beatrice.model import BeatriceModelManager
+from ai.beatrice.model import BeatriceModelManager, MODEL_API_VERSION
 from ai.voice_engine.beatrice import BeatriceVoiceEngine
 from ai.beatrice.runtime import BeatriceRuntimeLoader, RuntimeUnavailableError
 from customization.beatrice import (
@@ -100,7 +100,8 @@ class BeatriceRuntime:
             "configured": self.runtime_root is not None,
             "available": loader.available,
             "runtime_root": str(loader.runtime_root) if loader.runtime_root else None,
-            "version": "2.0.0-rc.0",
+            "runtime_name": "Beatrice v2 Runtime",
+            "model_api_version": MODEL_API_VERSION,
         }
 
     def configure_runtime(self, path: str | Path) -> dict:
@@ -111,7 +112,8 @@ class BeatriceRuntime:
                 f"Beatrice package was not found in runtime folder: {selected}"
             )
         details = {
-            "version": "2.0.0-rc.0",
+            "runtime_name": "Beatrice v2 Runtime",
+            "model_api_version": MODEL_API_VERSION,
             "runtime_root": str(loader.runtime_root),
             "available": True,
         }

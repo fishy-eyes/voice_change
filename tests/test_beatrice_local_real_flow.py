@@ -55,7 +55,8 @@ class RealBeatriceLocalFlowTests(unittest.TestCase):
             )
             try:
                 details = runtime.validate_runtime()
-                self.assertEqual(details["version"], "2.0.0-rc.0")
+                self.assertEqual(details["model_api_version"], "2.0.0-rc.0")
+                self.assertIsNone(details["runtime_implementation_version"])
                 runtime.set_enabled(True)
                 state = runtime.load_model(discovered[0].name)
                 self.assertTrue(state.ready, state.error)

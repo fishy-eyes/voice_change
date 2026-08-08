@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from ai.beatrice.catalog import BeatriceModelCatalog
-from ai.beatrice.model import EXPECTED_RUNTIME_VERSION, REQUIRED_MODEL_FILES
+from ai.beatrice.model import MODEL_API_VERSION, REQUIRED_MODEL_FILES
 from config.local_settings import LocalSettingsStore
 
 
@@ -19,7 +19,7 @@ def create_package(root: Path, name: str = "voice") -> Path:
         "\n".join(
             (
                 "[model]",
-                f'version = "{EXPECTED_RUNTIME_VERSION}"',
+                f'version = "{MODEL_API_VERSION}"',
                 f'name = "{name}"',
                 "[voice.0]",
                 f'name = "{name}001"',

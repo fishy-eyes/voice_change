@@ -31,12 +31,18 @@ class FakeRuntime:
             raise ValueError("SimpleBeatrice is missing")
         self.runtime_path = path
         self.configured.append(path)
-        return {"version": "2.0.0-rc.0"}
+        return {
+            "model_api_version": "2.0.0-rc.0",
+            "runtime_implementation_version": "2.0.0-rc.2",
+        }
 
     def validate_runtime(self):
         if self.runtime_path is None or not self.runtime_path.is_dir():
             raise FileNotFoundError("Runtime path does not exist")
-        return {"version": "2.0.0-rc.0"}
+        return {
+            "model_api_version": "2.0.0-rc.0",
+            "runtime_implementation_version": "2.0.0-rc.2",
+        }
 
 
 class FakeManager:
@@ -101,6 +107,8 @@ class BeatricePathGUITests(unittest.TestCase):
                     panel._select_runtime_folder()
                 self.assertEqual(manager.current_runtime.runtime_path, runtime_dir.resolve())
                 self.assertIn("2.0.0-rc.0", panel.runtime_status_label.text())
+                self.assertIn("模型 API", panel.runtime_status_label.text())
+                self.assertNotIn("2.0.0-rc.2", panel.runtime_status_label.text())
             finally:
                 panel.close()
 

@@ -27,6 +27,7 @@ class FakeBeatriceManager:
         }
         self.descriptor = SimpleNamespace(
             model_name="JVS corpus",
+            model_api_version="2.0.0-rc.0",
             runtime_requirement="2.0.0-rc.0",
             speaker_count=2,
             speaker_names=("jvs001", "jvs002"),
@@ -48,7 +49,12 @@ class FakeBeatriceManager:
         return SimpleNamespace(state="LOADED")
 
     def get_info(self):
-        return {"runtime": {"version": "2.0.0-rc.0"}}
+        return {
+            "runtime": {
+                "model_api_version": "2.0.0-rc.0",
+                "runtime_implementation_version": "2.0.0-rc.2",
+            }
+        }
 
 
 class BeatriceGUITests(unittest.TestCase):
@@ -65,6 +71,8 @@ class BeatriceGUITests(unittest.TestCase):
             self.assertEqual(panel.backend_id, "beatrice")
             self.assertEqual(panel.target_combo.count(), 2)
             self.assertIn("2.0.0-rc.0", panel.info_label.text())
+            self.assertIn("Model API", panel.info_label.text())
+            self.assertNotIn("2.0.0-rc.2", panel.info_label.text())
             self.assertTrue(panel.customize_button.isEnabled())
             panel.target_combo.setCurrentIndex(1)
             panel.pitch_spin.setValue(3.5)

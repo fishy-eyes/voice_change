@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ai.beatrice.model import BeatriceModelDescriptor, EXPECTED_RUNTIME_VERSION
+from ai.beatrice.model import BeatriceModelDescriptor, MODEL_API_VERSION
 from ai.beatrice.streaming_adapter import BeatriceStreamingAdapter, Float32FIFO
 from ai.voice_engine.beatrice import BeatriceVoiceEngine
 from ai.voice_worker import VoiceConversionWorker
@@ -35,7 +35,7 @@ class FakeConverter:
 
 
 def fake_factory():
-    return FakeConverter(), FakeModule, {"version": EXPECTED_RUNTIME_VERSION}
+    return FakeConverter(), FakeModule, {"model_api_version": MODEL_API_VERSION}
 
 
 class FakeLoader:
@@ -48,7 +48,7 @@ class FakeLoader:
         converter.set_config(**config.to_dict())
         self.converters.append(converter)
         return converter, FakeModule, {
-            "version": EXPECTED_RUNTIME_VERSION,
+            "model_api_version": MODEL_API_VERSION,
             "num_speakers": 2,
         }
 
@@ -60,8 +60,8 @@ def descriptor() -> BeatriceModelDescriptor:
         directory=Path("test"),
         metadata_path=Path("test/model.toml"),
         model_name="Test",
-        version=EXPECTED_RUNTIME_VERSION,
-        runtime_requirement=EXPECTED_RUNTIME_VERSION,
+        version=MODEL_API_VERSION,
+        runtime_requirement=MODEL_API_VERSION,
         speaker_count=2,
         speaker_names=("Alice", "Bob"),
         valid=True,

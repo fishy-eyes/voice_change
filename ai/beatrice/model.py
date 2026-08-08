@@ -11,7 +11,12 @@ import tomllib
 from loguru import logger
 
 
-EXPECTED_RUNTIME_VERSION = "2.0.0-rc.0"
+# This selects the model architecture exposed by ``beatrice.load_beatrice``.
+# It is not the version of the VST/client implementation that bundles the API.
+MODEL_API_VERSION = "2.0.0-rc.0"
+# Backward-compatible import for callers written before the distinction between
+# the model API and the runtime implementation was documented.
+EXPECTED_RUNTIME_VERSION = MODEL_API_VERSION
 REQUIRED_MODEL_FILES = (
     "phone_extractor.bin",
     "pitch_estimator.bin",
@@ -43,6 +48,11 @@ class BeatriceModelDescriptor:
     @property
     def required_files(self) -> Mapping[str, Path]:
         return {name: self.directory / name for name in REQUIRED_MODEL_FILES}
+
+    @property
+    def model_api_version(self) -> str:
+        """Model/API architecture requested from the external runtime."""
+        return self.runtime_requirement
 
     @property
     def identity(self) -> str:
@@ -85,10 +95,10 @@ class BeatriceModelManager:
             if not isinstance(model, Mapping):
                 raise ValueError("Beatrice metadata is missing [model]")
             version = model.get("version")
-            if version != EXPECTED_RUNTIME_VERSION:
+            if version != MODEL_API_VERSION:
                 raise ValueError(
-                    f"Beatrice model requires {version!r}; supported runtime is "
-                    f"{EXPECTED_RUNTIME_VERSION!r}"
+                    f"Unsupported Beatrice model API {version!r}; supported model API is "
+                    f"{MODEL_API_VERSION!r}"
                 )
             model_name = str(model.get("name", "")).strip()
             if not model_name:
@@ -133,7 +143,7 @@ class BeatriceModelManager:
                 metadata_path=metadata_path,
                 model_name=model_name,
                 version=str(version),
-                runtime_requirement=EXPECTED_RUNTIME_VERSION,
+                runtime_requirement=MODEL_API_VERSION,
                 speaker_count=len(indexed),
                 speaker_names=tuple(value for _, value, _ in indexed),
                 speaker_average_pitches=tuple(value for _, _, value in indexed),
@@ -147,7 +157,7 @@ class BeatriceModelManager:
                 metadata_path=None,
                 model_name=None,
                 version=None,
-                runtime_requirement=EXPECTED_RUNTIME_VERSION,
+                runtime_requirement=MODEL_API_VERSION,
                 speaker_count=0,
                 speaker_names=(),
                 speaker_average_pitches=(),
@@ -189,5 +199,6 @@ __all__ = [
     "BeatriceModelDescriptor",
     "BeatriceModelManager",
     "EXPECTED_RUNTIME_VERSION",
+    "MODEL_API_VERSION",
     "REQUIRED_MODEL_FILES",
 ]

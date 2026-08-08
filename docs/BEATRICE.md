@@ -50,9 +50,11 @@ $env:VOICE_CHANGE_BEATRICE_RUNTIME_DIR = 'D:\path\to\beatrice-runtime'
 $env:VOICE_CHANGE_BEATRICE_MODELS_DIR = 'D:\path\to\beatrice-model-packages'
 ```
 
-The selected runtime root must expose the `beatrice` Python package and
-`load_beatrice('2.0.0-rc.0')`. Each immediate child of the model directory is
-one selectable package:
+The selected runtime root must expose the `beatrice` Python package. The
+package's `load_beatrice('2.0.0-rc.0')` call selects the current model/API
+architecture; `2.0.0-rc.0` is not assumed to be the implementation version of
+the VST, client, or Python package that bundles that API. Each immediate child
+of the model directory is one selectable package:
 
 ```text
 <models-dir>/
@@ -65,10 +67,41 @@ one selectable package:
     └── speaker_embeddings.bin
 ```
 
-The loader accepts only runtime/model version `2.0.0-rc.0`, validates the
-16 kHz/160-sample input and 24 kHz/240-sample output contract, and checks the
-observed native methods and conversion result shape. It does not scan RVC
-`.pth` or `.index` files.
+The loader currently accepts models using API architecture `2.0.0-rc.0`,
+validates the 16 kHz/160-sample input and 24 kHz/240-sample output contract,
+and checks the observed native methods and conversion result shape. It does
+not reject a runtime because its separate implementation revision is rc2/rc3,
+and it does not scan RVC `.pth` or `.index` files.
+
+## Runtime compatibility
+
+Compatibility was re-audited on 2026-08-08. The official rc2 VST source and
+public header still use the `Beatrice20rc0_*` ABI for `2.0.0-rc.0` models. The
+rc2 Formant precision change is host-side: official commit `83b0e802` changes
+the VST wrapper's stored Formant value from `int` to `double`; it does not
+rename the ABI or introduce a new model format. These `20rc0` names must remain
+because they identify the model/API architecture.
+
+| Candidate | Evidence | Production result |
+| --- | --- | --- |
+| Existing VCClient Python Runtime | `v20rc0.pyd` SHA256 `E6A4441457869CE61A8B41C8EF2D77D23FD2062C319CCC34A2520B33A09E75BA` | Real JVS load, multi-speaker, tuning, offline, Worker, and streaming paths pass. |
+| VCClient 2.2.2-beta Windows Beatrice package | Archive SHA256 `CA7DD6E1255277667AD6EF2128C1FBBFF0FAE3F19E96AA86C2F59CF75040A150` | Its Python Runtime is byte-identical to the existing candidate, so there is no second rc2-labelled Python binary to benchmark. |
+| Official VST 2.0.0-rc.2 | Source tag `v2.0.0-rc.2` (`78af5e02`), public ABI and model path audited | Architecture-compatible evidence only. A VST bundle is not a Python Runtime directory and was not claimed as a production loader run. |
+| Official VST 2.0.0-rc.3 | Public source/header audit | Runtime execution not tested; no rc3 Python Runtime candidate was available. |
+
+The existing Python Runtime's Formant outputs change in 0.5 steps, matching
+the nine embeddings used by the corrected rc2 VST path. With a fixed JVS input,
+`-1/-0.75`, `-0.5/-0.25`, `0.25/0.5`, and `0.75/1.0` each produced identical
+WAV hashes. This is discrete half-step behavior, not arbitrary continuous
+interpolation; the rc2 fix prevents the VST host from truncating the value to
+whole steps.
+
+Official references:
+
+- https://prj-beatrice.com/
+- https://github.com/prj-beatrice/beatrice-vst/tree/v2.0.0-rc.2
+- https://github.com/prj-beatrice/beatrice-vst/commit/83b0e80273873bad21d90baccce7cfe1d5f702c1
+- https://huggingface.co/wok000/vcclient000/tree/main
 
 ## Realtime path
 

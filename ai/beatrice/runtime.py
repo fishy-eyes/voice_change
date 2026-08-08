@@ -1,4 +1,4 @@
-"""Defensive loader for the user-supplied Beatrice 2.0.0-rc.0 runtime."""
+"""Defensive loader for a user-supplied Beatrice v2 Python runtime."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import numpy as np
 
 from ai.beatrice.model import (
     BeatriceModelDescriptor,
-    EXPECTED_RUNTIME_VERSION,
+    MODEL_API_VERSION,
 )
 
 
@@ -64,6 +64,7 @@ class BeatriceRuntimeLoader:
             configured = os.environ.get(self.env_name)
         self.runtime_root = self._normalize_root(configured)
         self.module: Any | None = None
+        self.runtime_implementation_version: str | None = None
 
     @staticmethod
     def _normalize_root(value: str | Path | None) -> Path | None:
@@ -82,20 +83,24 @@ class BeatriceRuntimeLoader:
 
     def validate(self) -> dict[str, Any]:
         """Load and verify the module contract without creating a converter."""
-        module = self.load(EXPECTED_RUNTIME_VERSION)
+        module = self.load(MODEL_API_VERSION)
         return {
-            "version": EXPECTED_RUNTIME_VERSION,
+            "model_api_version": MODEL_API_VERSION,
+            # Compatibility alias for older internal callers. This value is a
+            # model/API identifier, not the runtime implementation revision.
+            "version": MODEL_API_VERSION,
+            "runtime_implementation_version": self.runtime_implementation_version,
             "runtime_root": str(self.runtime_root),
             **EXPECTED_CONSTANTS,
             "simple_beatrice": callable(getattr(module, "SimpleBeatrice", None)),
         }
 
-    def load(self, version: str = EXPECTED_RUNTIME_VERSION):
-        if version != EXPECTED_RUNTIME_VERSION:
+    def load(self, model_api_version: str = MODEL_API_VERSION):
+        if model_api_version != MODEL_API_VERSION:
             raise RuntimeUnavailableError(
-                f"Unsupported Beatrice runtime version {version!r}; "
-                f"only {EXPECTED_RUNTIME_VERSION!r} is accepted / "
-                f"仅支持 {EXPECTED_RUNTIME_VERSION}"
+                f"Unsupported Beatrice model API {model_api_version!r}; "
+                f"only {MODEL_API_VERSION!r} is accepted / "
+                f"仅支持模型 API {MODEL_API_VERSION}"
             )
         root = self.runtime_root
         if not self.available or root is None:
@@ -119,7 +124,7 @@ class BeatriceRuntimeLoader:
             loader = getattr(package, "load_beatrice", None)
             if not callable(loader):
                 raise AttributeError("beatrice.load_beatrice is missing")
-            module = loader(version)
+            module = loader(model_api_version)
             self._validate_module(module)
         except RuntimeUnavailableError:
             raise
@@ -129,7 +134,17 @@ class BeatriceRuntimeLoader:
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         self.module = module
+        self.runtime_implementation_version = self._implementation_version(package)
         return module
+
+    @staticmethod
+    def _implementation_version(package: Any) -> str | None:
+        """Read an optional package revision without requiring one to exist."""
+        for name in ("__version__", "RUNTIME_VERSION", "VERSION"):
+            value = getattr(package, name, None)
+            if isinstance(value, (str, int, float)) and str(value).strip():
+                return str(value).strip()
+        return None
 
     @staticmethod
     def _validate_module(module: Any) -> None:
@@ -162,7 +177,7 @@ class BeatriceRuntimeLoader:
     def create_converter(self, descriptor: BeatriceModelDescriptor, config: Any):
         if not descriptor.valid:
             raise ValueError(descriptor.validation_error or "Invalid Beatrice package")
-        module = self.load(descriptor.runtime_requirement)
+        module = self.load(descriptor.model_api_version)
         files = descriptor.required_files
         converter = module.SimpleBeatrice(
             *(str(files[name]) for name in files)
@@ -191,7 +206,10 @@ class BeatriceRuntimeLoader:
         parameters = config.to_dict() if hasattr(config, "to_dict") else dict(config)
         converter.set_config(**parameters)
         details = {
-            "version": descriptor.runtime_requirement,
+            "model_api_version": descriptor.model_api_version,
+            # Compatibility alias; see validate().
+            "version": descriptor.model_api_version,
+            "runtime_implementation_version": self.runtime_implementation_version,
             "runtime_root": str(self.runtime_root),
             "num_speakers": speaker_count,
             "codebook_size": int(converter.get_codebook_size()),

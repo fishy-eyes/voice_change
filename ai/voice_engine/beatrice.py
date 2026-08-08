@@ -155,7 +155,7 @@ class BeatriceVoiceEngine(VoiceConversionEngine):
         capabilities = EngineCapabilities(
             backend_id=self.backend,
             display_name="Beatrice v2",
-            backend_version=self.descriptor.runtime_requirement,
+            backend_version=self.descriptor.model_api_version,
             model_name=self.descriptor.model_name,
             loaded=self.is_loaded,
             input_sample_rate=self.sample_rate,
