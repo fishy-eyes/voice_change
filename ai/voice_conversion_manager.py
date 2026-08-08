@@ -43,6 +43,7 @@ class VoiceConversionManager:
     ) -> None:
         self._backends: dict[str, object] = {}
         self._current_backend: str | None = None
+        self._active_backend: str | None = None
         self._requested_enabled = False
         self._loading = False
         self._last_error: str | None = None
@@ -55,6 +56,7 @@ class VoiceConversionManager:
             thread_name_prefix="voice-conversion-loader",
         )
         self._closed = False
+        self._model_cache: dict[str, tuple[object, ...]] = {}
         for name, runtime in (backends or {}).items():
             self.register_backend(name, runtime)
         if default_backend is not None:
@@ -98,6 +100,11 @@ class VoiceConversionManager:
             return self._current_backend
 
     @property
+    def active_backend(self) -> str | None:
+        with self._lock:
+            return self._active_backend
+
+    @property
     def current_runtime(self):
         with self._lock:
             if self._current_backend is None:
@@ -120,19 +127,78 @@ class VoiceConversionManager:
             self._current_backend = key
             self._last_error = None
 
-    def discover_models(self, backend: str | None = None) -> list[object]:
-        runtime = self._runtime_for(backend)
+    def discover_models(
+        self, backend: str | None = None, *, refresh: bool = False
+    ) -> list[object]:
+        key = self.current_backend if backend is None else self._normalize_backend(backend)
+        if key is None:
+            return []
+        with self._lock:
+            cached = self._model_cache.get(key)
+        if cached is not None and not refresh:
+            return list(cached)
+        runtime = self._runtime_for(key)
         model_manager = getattr(runtime, "model_manager", None)
         discover = getattr(model_manager, "discover_models", None)
-        return list(discover()) if callable(discover) else []
+        models = tuple(discover()) if callable(discover) else ()
+        with self._lock:
+            self._model_cache[key] = models
+        return list(models)
+
+    def invalidate_model_cache(self, backend: str | None = None) -> None:
+        key = self.current_backend if backend is None else self._normalize_backend(backend)
+        with self._lock:
+            if key is None:
+                self._model_cache.clear()
+            else:
+                self._model_cache.pop(key, None)
+
+    def supports_model_folder_import(self, backend: str | None = None) -> bool:
+        runtime = self._runtime_for(backend)
+        return bool(getattr(runtime, "supports_model_folder_import", False))
+
+    def add_model_path(self, path: str, backend: str | None = None):
+        runtime = self._runtime_for(backend)
+        add = getattr(runtime, "add_model_path", None)
+        if not callable(add):
+            raise RuntimeError("current backend does not support model folder import")
+        result = add(path)
+        self.invalidate_model_cache(backend)
+        return result
+
+    def remove_model_path(self, path: str, backend: str | None = None) -> bool:
+        runtime = self._runtime_for(backend)
+        remove = getattr(runtime, "remove_model_path", None)
+        if not callable(remove):
+            return False
+        removed = bool(remove(path))
+        if removed:
+            self.invalidate_model_cache(backend)
+        return removed
+
+    def validate_configuration(
+        self, model: str | None, backend: str | None = None
+    ) -> None:
+        runtime = self._runtime_for(backend)
+        validate = getattr(runtime, "validate_configuration", None)
+        if callable(validate):
+            validate(model)
+
+    def get_preferred_model(self, backend: str | None = None) -> str | None:
+        runtime = self._runtime_for(backend)
+        value = getattr(runtime, "preferred_model", None)
+        return str(value) if value else None
 
     def set_enabled(self, enabled: bool) -> None:
         requested = bool(enabled)
         with self._lock:
             self._requested_enabled = requested
-            runtime = self.current_runtime
-        if runtime is not None:
-            runtime.set_enabled(requested)
+            selected = self.current_runtime
+            active = self._backends.get(self._active_backend)
+        if selected is not None:
+            selected.set_enabled(requested)
+        if active is not None and active is not selected:
+            active.set_enabled(requested)
 
     def load_model(self, backend: str, model: str, *, audio_stream=None):
         """Switch synchronously; GUI callers normally use the async wrapper."""
@@ -144,7 +210,7 @@ class VoiceConversionManager:
                     raise RuntimeError("voice conversion manager is closed")
                 if key not in self._backends:
                     raise LookupError(f"voice conversion backend not found: {backend}")
-                old_key = self._current_backend
+                old_key = self._active_backend
                 old_runtime = self._backends.get(old_key) if old_key else None
                 runtime = self._backends[key]
                 old_ready = bool(
@@ -166,6 +232,8 @@ class VoiceConversionManager:
                             f"backend {old_key} could not release its resources"
                         )
                 with self._lock:
+                    if old_runtime is not runtime:
+                        self._active_backend = None
                     self._current_backend = key
                 runtime.set_enabled(requested_enabled)
                 state = (
@@ -178,6 +246,7 @@ class VoiceConversionManager:
                     raise RuntimeError(str(state_error or "model load failed"))
                 runtime.set_enabled(requested_enabled)
                 with self._lock:
+                    self._active_backend = key
                     self._lifecycle_state = VoiceConversionState.LOADED
                 return state
             except Exception as exc:
@@ -270,6 +339,10 @@ class VoiceConversionManager:
         return dict(getter()) if callable(getter) else {}
 
     def update_current_parameters(self, **changes: Any) -> Mapping[str, Any]:
+        runtime = self.current_runtime
+        runtime_update = getattr(runtime, "update_parameters", None)
+        if callable(runtime_update):
+            return dict(runtime_update(**changes))
         engine = self.current_engine
         update = getattr(engine, "update_config", None)
         if not callable(update):
@@ -308,6 +381,8 @@ class VoiceConversionManager:
                 cleaned = False
                 logger.error("Voice conversion backend shutdown failed: {}", exc)
         with self._lock:
+            if cleaned:
+                self._active_backend = None
             self._lifecycle_state = (
                 VoiceConversionState.IDLE if cleaned else VoiceConversionState.FAILED
             )

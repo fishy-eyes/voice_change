@@ -58,6 +58,7 @@ class AIVoiceEffect(BaseEffect):
         # callback-side input storage grow without bound.
         self._input_buffer = np.empty(self._chunk_size, dtype=np.float32)
         self._input_size = 0
+        self._worker_generation = self._worker.continuity_generation
 
         self._pending_output_tail: np.ndarray | None = None
         # Output chunks use a deque plus an offset to avoid repeatedly copying
@@ -273,6 +274,10 @@ class AIVoiceEffect(BaseEffect):
             return flat.reshape(original_shape)
 
         try:
+            if self._worker_generation != self._worker.continuity_generation:
+                self._reset_buffers()
+                self._worker_generation = self._worker.continuity_generation
+
             self._drain_worker_output()
             self._accumulate_input(flat)
 
@@ -319,7 +324,11 @@ class AIVoiceEffect(BaseEffect):
                     logger.error("AIVoiceEffect: worker submission failed: {}", exc)
                     submitted = False
                 if not submitted:
-                    logger.warning("AIVoiceEffect: RVC chunk was not submitted")
+                    if self._worker_generation != self._worker.continuity_generation:
+                        self._reset_buffers()
+                        self._worker_generation = self._worker.continuity_generation
+                        return
+                    logger.warning("AIVoiceEffect: conversion chunk was not submitted")
                 # Retain the input tail as context for the next window. Queued
                 # or dropped, callback-side storage remains fixed-size.
                 if self._overlap_size:

@@ -1,0 +1,14 @@
+{
+  "startup": {
+    "autoload_last_model": false,
+    "last_backend": "",
+    "last_model": ""
+  },
+  "beatrice": {
+    "runtime_dir": "",
+    "model_roots": [],
+    "last_model": "",
+    "last_speaker": "",
+    "speaker_presets": {}
+  }
+}

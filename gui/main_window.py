@@ -306,7 +306,10 @@ class MainWindow(QMainWindow):
             worker,
             worker_state,
             int(getattr(worker, "infer_count", 0)),
-            int(getattr(worker, "error_count", 0)),
+            (
+                int(getattr(worker, "error_count", 0))
+                + int(getattr(worker, "continuity_error_count", 0))
+            ),
         )
 
     def _update_status_display(self) -> None:

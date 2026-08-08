@@ -74,11 +74,9 @@ class BackendSettingsTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_registry_only_exposes_real_rvc_panel(self) -> None:
+    def test_registry_exposes_both_production_backend_panels(self) -> None:
         registry = create_default_registry()
-        self.assertEqual(registry.backend_ids, ("rvc",))
-        with self.assertRaises(LookupError):
-            registry.create("beatrice", manager=FakeManager())
+        self.assertEqual(registry.backend_ids, ("rvc", "beatrice"))
 
     def test_rvc_panel_reads_updates_and_refreshes_runtime_state(self) -> None:
         manager = FakeManager()

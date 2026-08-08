@@ -37,8 +37,14 @@ class FakeRVCCore:
 
 class FakeRuntime:
     def __init__(self) -> None:
+        self.discovery_calls = 0
+
+        def discover():
+            self.discovery_calls += 1
+            return [SimpleNamespace(name="voice-a")]
+
         self.model_manager = SimpleNamespace(
-            discover_models=lambda: [SimpleNamespace(name="voice-a")]
+            discover_models=discover
         )
         self.state = SimpleNamespace(
             ready=False,
@@ -139,6 +145,18 @@ class VoiceConversionArchitectureTests(unittest.TestCase):
         finally:
             self.assertTrue(manager.shutdown())
         self.assertEqual(runtime.shutdown_calls, 1)
+
+    def test_model_metadata_is_cached_until_explicit_refresh(self) -> None:
+        runtime = FakeRuntime()
+        manager = VoiceConversionManager({"rvc": runtime}, default_backend="rvc")
+        try:
+            self.assertEqual(manager.discover_models()[0].name, "voice-a")
+            self.assertEqual(manager.discover_models()[0].name, "voice-a")
+            self.assertEqual(runtime.discovery_calls, 1)
+            manager.discover_models(refresh=True)
+            self.assertEqual(runtime.discovery_calls, 2)
+        finally:
+            manager.shutdown()
 
 
 if __name__ == "__main__":

@@ -10,10 +10,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFileDialog,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -69,7 +71,7 @@ class VoiceConversionPanel(QGroupBox):
         self.refresh_button.setSizePolicy(
             QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred
         )
-        self.refresh_button.clicked.connect(self.refresh_models)
+        self.refresh_button.clicked.connect(self._refresh_models_from_user)
         layout.addWidget(self.model_label, 2, 0)
         layout.addWidget(self.model_combo, 2, 1)
         layout.addWidget(self.refresh_button, 2, 2)
@@ -79,9 +81,12 @@ class VoiceConversionPanel(QGroupBox):
         self.load_button = QPushButton()
         self.load_button.clicked.connect(self._load_selected_model)
         self.settings_button = QPushButton()
+        self.add_model_button = QPushButton()
+        self.add_model_button.clicked.connect(self._add_model_folder)
         self.settings_button.clicked.connect(self._open_settings)
         buttons.addWidget(self.load_button, 1)
         buttons.addWidget(self.settings_button, 1)
+        buttons.addWidget(self.add_model_button, 1)
         layout.addLayout(buttons, 3, 1, 1, 2)
 
         self._refresh_backends()
@@ -102,6 +107,7 @@ class VoiceConversionPanel(QGroupBox):
         self.refresh_button.setText(self._t("vc.refresh"))
         self.load_button.setText(self._t("vc.load"))
         self.settings_button.setText(self._t("vc.settings"))
+        self.add_model_button.setText(self._t("vc.add_model"))
 
     def _refresh_backends(self) -> None:
         manager = self._manager()
@@ -118,23 +124,35 @@ class VoiceConversionPanel(QGroupBox):
         self.setEnabled(manager is not None)
         self.set_language(self._language)
 
-    def refresh_models(self) -> None:
+    def refresh_models(self, *, refresh: bool = False) -> None:
         manager = self._manager()
         current = self.model_combo.currentData()
         self._descriptors.clear()
         self.model_combo.clear()
         if manager is not None:
             try:
-                for descriptor in manager.discover_models():
+                models = (
+                    manager.discover_models(refresh=True)
+                    if refresh
+                    else manager.discover_models()
+                )
+                for descriptor in models:
                     name = str(descriptor.name)
                     self._descriptors[name] = descriptor
                     self.model_combo.addItem(name, name)
             except Exception as exc:
                 logger.error("model discovery failed: {}", exc)
+        if current is None and manager is not None:
+            preferred = getattr(manager, "get_preferred_model", None)
+            if callable(preferred):
+                current = preferred()
         index = self.model_combo.findData(current)
         if index >= 0:
             self.model_combo.setCurrentIndex(index)
         self.update_status()
+
+    def _refresh_models_from_user(self) -> None:
+        self.refresh_models(refresh=True)
 
     def _on_backend_changed(self, _index: int) -> None:
         manager = self._manager()
@@ -157,11 +175,48 @@ class VoiceConversionPanel(QGroupBox):
         if self._on_changed is not None:
             self._on_changed()
 
+
+    def _add_model_folder(self) -> None:
+        manager = self._manager()
+        backend = self.backend_combo.currentData()
+        if manager is None or not backend:
+            return
+        directory = QFileDialog.getExistingDirectory(
+            self, self._t("vc.select_model_folder"), ""
+        )
+        if not directory:
+            return
+        try:
+            manager.add_model_path(directory, backend=backend)
+        except Exception as exc:
+            logger.error("model folder registration failed: {}", exc)
+            QMessageBox.warning(
+                self,
+                self._t("vc.invalid_model_folder"),
+                str(exc),
+            )
+            return
+        self.refresh_models()
+        self.setToolTip(self._t("vc.model_folder_added"))
+
     def _load_selected_model(self) -> None:
         manager = self._manager()
         backend = self.backend_combo.currentData()
         model = self.model_combo.currentData()
-        if manager is None or not backend or not model:
+        if manager is None or not backend:
+            return
+        try:
+            validate = getattr(manager, "validate_configuration", None)
+            if callable(validate):
+                validate(model, backend=backend)
+        except Exception as exc:
+            logger.error("model configuration validation failed: {}", exc)
+            self.setToolTip(str(exc))
+            QMessageBox.warning(
+                self, self._t("vc.configuration_error"), str(exc)
+            )
+            return
+        if not model:
             return
         self.load_button.setEnabled(False)
         self.settings_button.setEnabled(False)
@@ -195,6 +250,13 @@ class VoiceConversionPanel(QGroupBox):
         except Exception as exc:
             logger.error("GUI model switch failed: {}", exc)
             self.setToolTip(str(exc))
+        else:
+            settings = getattr(self._context, "local_settings", None)
+            if settings is not None:
+                settings.update_startup(
+                    last_backend=str(self.backend_combo.currentData() or ""),
+                    last_model=str(self.model_combo.currentData() or ""),
+                )
         self._switch_future = None
         if self._settings_panel is not None:
             self._settings_panel.refresh_from_runtime()
@@ -245,11 +307,19 @@ class VoiceConversionPanel(QGroupBox):
         if manager is None:
             self.load_button.setEnabled(False)
             self.settings_button.setEnabled(False)
+            self.add_model_button.setVisible(False)
             return
         self.enable_checkbox.blockSignals(True)
         self.enable_checkbox.setChecked(bool(manager.requested_enabled))
         self.enable_checkbox.blockSignals(False)
         switching = self._switch_future is not None
+        supports_import = getattr(manager, "supports_model_folder_import", None)
+        can_import = bool(
+            callable(supports_import)
+            and supports_import(self.backend_combo.currentData())
+        )
+        self.add_model_button.setVisible(can_import)
+        self.add_model_button.setEnabled(can_import and not switching)
         self.load_button.setEnabled(self.model_combo.count() > 0 and not switching)
         self.settings_button.setEnabled(not switching)
 

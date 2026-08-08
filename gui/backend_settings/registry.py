@@ -29,8 +29,10 @@ class BackendSettingsRegistry:
 
 
 def create_default_registry() -> BackendSettingsRegistry:
+    from gui.backend_settings.beatrice import BeatriceSettingsPanel
     from gui.backend_settings.rvc import RVCSettingsPanel
 
     registry = BackendSettingsRegistry()
     registry.register("rvc", RVCSettingsPanel)
+    registry.register("beatrice", BeatriceSettingsPanel)
     return registry

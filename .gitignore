@@ -29,9 +29,14 @@ logs/
 *.pth
 *.pt
 *.index
-*.bin
 *.safetensors
 rvc_models/
+
+# Machine-local external Beatrice runtime/model packages
+models/beatrice/
+third_party/beatrice_runtime/
+config/local_settings.json
+config/local_settings.json.tmp
 
 # Machine-local voice customization profiles
 config/customization_profiles/*.json

@@ -77,3 +77,18 @@ RVC_MODELS_DIR: str = os.environ.get(
 )
 # RVC voice directory (contains .pth + .index files)
 RVC_VOICE_DIR: str = str(Path(RVC_MODEL_LIBRARY_DIR) / RVC_DEFAULT_MODEL)
+
+# ---- Optional external Beatrice v2 backend ----
+LOCAL_SETTINGS_FILE: str = str(PROJECT_ROOT / "config" / "local_settings.json")
+BEATRICE_MODEL_LIBRARY_DIR: str = str(PROJECT_ROOT / "models" / "beatrice")
+BEATRICE_ENV_MODELS_DIR: str | None = (
+    os.environ.get("VOICE_CHANGE_BEATRICE_MODELS_DIR", "").strip() or None
+)
+BEATRICE_DEFAULT_RUNTIME_DIR: str = str(PROJECT_ROOT / "third_party" / "beatrice_runtime")
+BEATRICE_RUNTIME_DIR: str | None = (
+    os.environ.get("VOICE_CHANGE_BEATRICE_RUNTIME_DIR", "").strip() or None
+)
+BEATRICE_CALLBACK_SIZE: int = BLOCKSIZE
+BEATRICE_INPUT_QUEUE_SIZE: int = 8
+BEATRICE_STARTUP_BUFFER_SIZE: int = 512
+BEATRICE_WORKER_STOP_TIMEOUT: float = 5.0

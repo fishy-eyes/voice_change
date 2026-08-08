@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from audio.device_manager import DeviceManager
     from effects.manager import EffectManager
     from core.rvc_runtime import RVCRuntime
+    from core.beatrice_runtime import BeatriceRuntime
     from ai.voice_conversion_manager import VoiceConversionManager
 
 
@@ -28,8 +29,10 @@ class AppContext:
         input_device: Optional[int] = None,
         output_device: Optional[int] = None,
         rvc_runtime: Optional[RVCRuntime] = None,
+        beatrice_runtime: Optional[BeatriceRuntime] = None,
         voice_conversion_manager: Optional[VoiceConversionManager] = None,
         self_monitor: Optional[SelfMonitor] = None,
+        local_settings=None,
     ) -> None:
         self.effect_manager = effect_manager
         self.device_manager = device_manager
@@ -37,5 +40,7 @@ class AppContext:
         self.input_device = input_device
         self.output_device = output_device
         self.rvc_runtime = rvc_runtime
+        self.beatrice_runtime = beatrice_runtime
         self.voice_conversion_manager = voice_conversion_manager
         self.self_monitor = self_monitor
+        self.local_settings = local_settings

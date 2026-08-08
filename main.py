@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 import signal
 import sys
 import threading
+from time import perf_counter
 from typing import Callable, Optional
 
 from loguru import logger
@@ -18,7 +20,16 @@ from audio.recorder import AudioRecorder
 from audio.stream import AudioStream
 from config.settings import (
     AUTO_SELECT_DEVICES,
+    BEATRICE_CALLBACK_SIZE,
+    BEATRICE_DEFAULT_RUNTIME_DIR,
+    BEATRICE_ENV_MODELS_DIR,
+    BEATRICE_INPUT_QUEUE_SIZE,
+    BEATRICE_MODEL_LIBRARY_DIR,
+    BEATRICE_RUNTIME_DIR,
+    BEATRICE_STARTUP_BUFFER_SIZE,
+    BEATRICE_WORKER_STOP_TIMEOUT,
     ENABLE_AI_VOICE,
+    LOCAL_SETTINGS_FILE,
     GAIN_VALUE,
     INPUT_DEVICE,
     RVC_USER_MODELS_FILE,
@@ -29,6 +40,9 @@ from config.settings import (
 )
 from core.context import AppContext
 from ai.voice_conversion_manager import VoiceConversionManager
+from ai.beatrice.catalog import BeatriceModelCatalog
+from config.local_settings import LocalSettingsStore
+from core.beatrice_runtime import BeatriceRuntime
 from core.device_switching import stop_current_audio_stream
 from core.rvc_model_manager import RVCModelManager
 from core.rvc_runtime import RVCRuntime
@@ -158,10 +172,15 @@ def _run_release_smoke_test() -> None:
 
 
 def main() -> None:
-    """Initialize RVC before exposing AudioStream, then clean up in order."""
+    """Show the base application first; heavyweight backends load on demand."""
     global _quit_callback
 
+    startup_started = perf_counter()
     setup_logger()
+    logger.info(
+        "Startup timing: logger ready {:.1f} ms",
+        (perf_counter() - startup_started) * 1000.0,
+    )
     _stop_event.clear()
     if "--release-smoke-test" in sys.argv:
         try:
@@ -175,6 +194,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _on_signal)
 
     rvc_runtime: Optional[RVCRuntime] = None
+    beatrice_runtime: Optional[BeatriceRuntime] = None
     voice_conversion_manager: Optional[VoiceConversionManager] = None
     stream: Optional[AudioStream] = None
     context: Optional[AppContext] = None
@@ -182,7 +202,12 @@ def main() -> None:
     cli_thread: Optional[threading.Thread] = None
 
     try:
+        phase_started = perf_counter()
         input_idx, output_idx = _select_devices()
+        logger.info(
+            "Startup timing: device discovery {:.1f} ms",
+            (perf_counter() - phase_started) * 1000.0,
+        )
         recorder = AudioRecorder(device=input_idx)
         player = AudioPlayer(device=output_idx)
 
@@ -194,26 +219,57 @@ def main() -> None:
         )
         rvc_runtime = RVCRuntime(model_manager)
         rvc_runtime.bind_effect_manager(effect_manager)
+        local_settings = LocalSettingsStore(LOCAL_SETTINGS_FILE)
+        beatrice_settings = local_settings.beatrice
+        local_runtime = str(beatrice_settings.get("runtime_dir", "")).strip()
+        default_runtime = Path(BEATRICE_DEFAULT_RUNTIME_DIR)
+        beatrice_runtime_root = (
+            local_runtime
+            or BEATRICE_RUNTIME_DIR
+            or (str(default_runtime) if default_runtime.is_dir() else None)
+        )
+        registered_packages = beatrice_settings.get("model_roots", [])
+        environment_roots = (
+            (BEATRICE_ENV_MODELS_DIR,) if BEATRICE_ENV_MODELS_DIR else ()
+        )
+        beatrice_model_manager = BeatriceModelCatalog(
+            BEATRICE_MODEL_LIBRARY_DIR,
+            registered_packages=registered_packages,
+            additional_roots=environment_roots,
+            on_registered_paths_changed=lambda roots: local_settings.update_beatrice(
+                model_roots=list(roots)
+            ),
+        )
+        beatrice_runtime = BeatriceRuntime(
+            beatrice_model_manager,
+            runtime_root=beatrice_runtime_root,
+            local_settings=local_settings,
+            callback_samples=BEATRICE_CALLBACK_SIZE,
+            input_queue_size=BEATRICE_INPUT_QUEUE_SIZE,
+            startup_buffer_samples=BEATRICE_STARTUP_BUFFER_SIZE,
+            stop_timeout=BEATRICE_WORKER_STOP_TIMEOUT,
+        )
+        beatrice_runtime.bind_effect_manager(effect_manager)
         voice_conversion_manager = VoiceConversionManager(
-            {"rvc": rvc_runtime},
+            {"rvc": rvc_runtime, "beatrice": beatrice_runtime},
             default_backend="rvc",
         )
-        voice_conversion_manager.set_enabled(ENABLE_AI_VOICE)
-        if ENABLE_AI_VOICE:
-            rvc_state = voice_conversion_manager.load_model(
-                "rvc", RVC_DEFAULT_MODEL
-            )
-            if not rvc_state.ready:
-                logger.warning(
-                    "Default RVC model failed to load; base effects remain available: {}",
-                    rvc_state.error,
-                )
+        # The initial chain is Gain-only.  Model metadata is lightweight and
+        # scanned exactly once here; the GUI consumes the manager cache.
+        voice_conversion_manager.set_enabled(False)
+        phase_started = perf_counter()
+        for backend in voice_conversion_manager.available_backends:
+            voice_conversion_manager.discover_models(backend)
+        logger.info(
+            "Startup timing: model metadata discovery {:.1f} ms",
+            (perf_counter() - phase_started) * 1000.0,
+        )
         if _stop_event.is_set():
             logger.info("shutdown requested during initialization")
             return
 
-        # AudioStream is only created after AI is ready or has safely fallen
-        # back to the base effect chain. The GUI may start it later.
+        # AudioStream starts from the safe base chain; the GUI may start it
+        # independently of any optional model backend.
         stream = AudioStream(recorder, player, effect_manager=effect_manager)
         context = AppContext(
             effect_manager=effect_manager,
@@ -222,11 +278,40 @@ def main() -> None:
             input_device=input_idx,
             output_device=output_idx,
             rvc_runtime=rvc_runtime,
+            beatrice_runtime=beatrice_runtime,
             voice_conversion_manager=voice_conversion_manager,
             self_monitor=self_monitor,
+            local_settings=local_settings,
         )
+        phase_started = perf_counter()
         app, _window = create_app(context)
+        logger.info(
+            "Startup timing: GUI creation {:.1f} ms",
+            (perf_counter() - phase_started) * 1000.0,
+        )
+        logger.info(
+            "Startup timing: GUI visible {:.1f} ms (visible={})",
+            (perf_counter() - startup_started) * 1000.0,
+            bool(getattr(_window, "isVisible", lambda: True)()),
+        )
         _quit_callback = app.quit
+
+        startup = local_settings.startup
+        if bool(startup.get("autoload_last_model", False)):
+            backend = str(startup.get("last_backend", "")).strip()
+            model = str(startup.get("last_model", "")).strip()
+            if backend in voice_conversion_manager.available_backends and model:
+                logger.info(
+                    "Scheduling optional post-GUI model autoload: {}/{}",
+                    backend,
+                    model,
+                )
+                voice_conversion_manager.set_enabled(bool(ENABLE_AI_VOICE))
+                voice_conversion_manager.switch_model_async(
+                    backend,
+                    model,
+                    audio_stream=stream,
+                )
 
         cli_thread = threading.Thread(
             target=_cli_loop,

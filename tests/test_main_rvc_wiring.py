@@ -1,4 +1,4 @@
-"""Verify main.py wires the default discovered RVC model into AppContext."""
+"""Verify startup remains lightweight until the user requests a model."""
 
 from __future__ import annotations
 
@@ -78,6 +78,10 @@ class FakeSelfMonitor:
 
 
 class MainRVCWiringTests(unittest.TestCase):
+    @patch(
+        "ai.beatrice.runtime.importlib.import_module",
+        side_effect=AssertionError("native Beatrice import during startup"),
+    )
     @patch("main.SelfMonitor", FakeSelfMonitor)
     @patch("main.threading.Thread", FakeThread)
     @patch("main.create_app", return_value=(FakeApp(), object()))
@@ -89,15 +93,18 @@ class MainRVCWiringTests(unittest.TestCase):
     @patch("main._select_devices", return_value=(1, 2))
     @patch("main.signal.signal")
     @patch("main.setup_logger")
-    def test_main_loads_default_model_and_shuts_runtime_down(self, *mocks) -> None:
+    def test_main_does_not_load_default_model_and_shuts_runtime_down(self, *mocks) -> None:
         del mocks
         main.main()
 
         runtime = FakeRuntime.instance
         self.assertIsNotNone(runtime)
-        self.assertTrue(runtime.enabled)
-        self.assertEqual(runtime.loaded, "modelF")
+        self.assertFalse(runtime.enabled)
+        self.assertIsNone(runtime.loaded)
         self.assertIsNotNone(runtime.bound)
+        self.assertEqual(
+            [effect.name for effect in runtime.bound.effects], ["GainEffect"]
+        )
         self.assertTrue(runtime.shutdown_called)
         self.assertIsNotNone(FakeSelfMonitor.instance)
         self.assertTrue(FakeSelfMonitor.instance.stop_called)

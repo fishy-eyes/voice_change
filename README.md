@@ -183,21 +183,42 @@ rvc_models/
 如需临时使用其他位置，可设置 `VOICE_CHANGE_RVC_SOURCE_DIR` 和
 `VOICE_CHANGE_RVC_MODELS_DIR` 环境变量覆盖默认目录。
 
-### 3. 准备声音模型
+### 3. Beatrice 本地配置
+
+克隆项目后，正常 GUI 使用不需要在 PowerShell 中设置环境变量：
+
+1. 创建或激活 `voice_change` 环境并启动程序。
+2. Backend 选择 **BEATRICE**。
+3. 打开 **模型设置**，点击 **选择 Runtime 文件夹**，选择完整的本地
+   Beatrice Runtime 根目录。
+4. 点击主界面或设置页的 **添加模型**，直接选择一个完整的 Beatrice
+   Model Package 文件夹（例如 `jvs/`，其中包含一个 TOML 和 5 个 bin）。
+5. 在 Model 下拉框选择 Model Package 并加载，再到模型设置选择
+   Target Speaker。
+
+路径保存在不会进入 Git 的 `config/local_settings.json`。程序只注册绝对
+路径，不复制、修改或删除 Runtime/模型文件；**从列表移除**也只取消注册。
+`config/local_settings.example.json` 提供空值示例。默认仍扫描
+`models/beatrice/`，而 `VOICE_CHANGE_BEATRICE_RUNTIME_DIR` 和
+`VOICE_CHANGE_BEATRICE_MODELS_DIR` 继续供 CLI、自动化测试和高级用户使用。
+
+三个概念保持独立：
+
+```text
+Backend -> Model Package -> Target Speaker
+```
+
+
+### 4. 准备声音模型
 
 - 在 GUI 中点击 **Import RVC Model**，选择含 `.pth`、可选 `.index` 和可选 `profile.json` 的目录。程序只记录路径，不复制模型。
 - 或把模型放入 `models/rvc/<model-name>/`，并提供指向 `.pth` 和可选 `.index` 的 `profile.json`。
 
 没有 profile 的外部模型会使用 RMVPE、Pitch 0、Index Rate 0.30、Protect 0.33、RMS Mix Rate 0.25。存在多个 `.pth` 或 `.index` 时，界面会要求明确选择。
 
-### 4. 启动程序
+### 5. 启动程序
 
-确认 `config/settings.py` 中启用了 AI 并设置了默认模型：
-
-```python
-ENABLE_AI_VOICE = True
-RVC_DEFAULT_MODEL = "modelF"
-```
+无需在启动前启用 AI 或加载默认模型；模型会在界面中点击 **Load Model** 后异步加载。
 
 运行：
 
@@ -205,7 +226,21 @@ RVC_DEFAULT_MODEL = "modelF"
 python main.py
 ```
 
-### 5. 在界面中启用变声
+The default launch is lazy: the initial effect chain contains only Output
+Gain, AI is off, and neither RVC weights/HuBERT/RMVPE nor the native Beatrice
+runtime is loaded before the main window appears. Select a backend/model and
+click **Load Model** to start the existing asynchronous loader. Optional
+post-window autoload can be enabled with
+`startup.autoload_last_model: true` in the ignored
+`config/local_settings.json`; it is `false` by default.
+
+For Beatrice, **Model Settings → Assisted Tuning** provides sequential
+source-F0, pitch, formant, and VQ-neighbor comparisons. Candidate inference is
+isolated from realtime state, and the selected speaker preset is stored only
+in local settings. See `docs/BEATRICE.md` for the exact workflow and safety
+boundaries.
+
+### 6. 在界面中启用变声
 
 1. 使用右上角按钮切换 English/中文。
 2. 在 **Device Selection** 中选择麦克风和主输出设备；游戏或语音软件通常使用 VB-CABLE。
@@ -216,7 +251,7 @@ python main.py
 7. 如需从耳机听到处理后的声音，在 **Self Monitor** 中选择耳机、设置音量并启用。
 8. 使用 RVC Advanced 面板实时调节参数；滑条说明会显示向左或向右的声音变化。
 
-### 6. 使用智能音色适配
+### 7. 使用智能音色适配
 
 1. 在 **AI Voice** 中加载目标 RVC 模型。
 2. 点击 **智能音色适配 / 定制微调**。
@@ -236,7 +271,7 @@ python main.py
 
 保存按钮提示会显示默认文件名。Windows 非法文件名字符会自动替换；配置仍可在保存对话框中重命名或选择其他目录。
 
-### 7. 构建 Windows Release
+### 8. 构建 Windows Release
 
 安装构建依赖后运行脚本；默认使用项目内的 `rvc_source/`：
 
