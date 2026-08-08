@@ -16,13 +16,17 @@ from ai.beatrice.streaming_adapter import BeatriceStreamingAdapter
 from ai.voice_engine.base import EngineCapabilities, VoiceConversionEngine
 
 
+DEFAULT_MIN_SOURCE_PITCH = 30.0
+DEFAULT_MAX_SOURCE_PITCH = 1100.0
+
+
 @dataclass(frozen=True)
 class BeatriceConfig:
     target_speaker: int = 0
     formant_shift: float = 0.0
     pitch_shift_semitone: float = 0.0
-    min_source_pitch: float = 30.0
-    max_source_pitch: float = 1100.0
+    min_source_pitch: float = DEFAULT_MIN_SOURCE_PITCH
+    max_source_pitch: float = DEFAULT_MAX_SOURCE_PITCH
     vq_num_neighbors: int = 4
 
     def to_dict(self) -> dict[str, int | float]:
@@ -175,4 +179,9 @@ class BeatriceVoiceEngine(VoiceConversionEngine):
         }
 
 
-__all__ = ["BeatriceConfig", "BeatriceVoiceEngine"]
+__all__ = [
+    "BeatriceConfig",
+    "BeatriceVoiceEngine",
+    "DEFAULT_MAX_SOURCE_PITCH",
+    "DEFAULT_MIN_SOURCE_PITCH",
+]

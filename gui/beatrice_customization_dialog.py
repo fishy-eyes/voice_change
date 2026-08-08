@@ -37,6 +37,7 @@ from customization.recording_session import (
     STANDARD_RECORDING_TEXT,
     TemporaryAudioDirectory,
 )
+from gui.i18n import tr
 
 
 class BeatriceCandidateTask(QObject):
@@ -99,7 +100,6 @@ class BeatriceCustomizationDialog(QDialog):
     """Record/analyze, then compare isolated candidates stage by stage."""
 
     STAGE_NAMES = {
-        "source_pitch": ("源音高范围", "Source pitch range"),
         "pitch_coarse": ("音高粗调", "Pitch coarse"),
         "pitch_fine": ("音高微调", "Pitch fine"),
         "formant": ("共振峰", "Formant"),
@@ -277,15 +277,27 @@ class BeatriceCustomizationDialog(QDialog):
         self._search = BeatriceParameterSearch(
             base, self._analysis, capabilities, self.descriptor
         )
-        recommendation = self._search.current.candidates[
-            len(self._search.current.candidates) // 2
-        ]
         self.analysis_label.setText(
-            "F0 P5/P50/P95: "
-            f"{self._analysis.f0_p5:.1f} / {self._analysis.f0_p50:.1f} / {self._analysis.f0_p95:.1f} Hz; "
-            f"RMS: {self._analysis.rms:.4f}\n"
-            f"{self._text('推荐 Source Pitch', 'Recommended Source Pitch')}: "
-            f"{recommendation.min_source_pitch:.1f}–{recommendation.max_source_pitch:.1f} Hz"
+            tr(
+                self.language,
+                "beatrice.detected_pitch_range",
+                low=f"{self._analysis.f0_p5:.1f}",
+                high=f"{self._analysis.f0_p95:.1f}",
+            )
+            + "\n"
+            + tr(
+                self.language,
+                "beatrice.median_pitch",
+                median=f"{self._analysis.f0_p50:.1f}"
+            )
+            + f"; RMS: {self._analysis.rms:.4f}; "
+            + f"voiced: {self._analysis.voiced_ratio:.1%}\n"
+            + tr(
+                self.language,
+                "beatrice.source_pitch_keep_current",
+                low=f"{base.min_source_pitch:.1f}",
+                high=f"{base.max_source_pitch:.1f}",
+            )
         )
         self._prepare_round()
 
@@ -362,22 +374,46 @@ class BeatriceCustomizationDialog(QDialog):
         self._results = list(results)
         for index, result in enumerate(self._results[:5]):
             valid = bool(result.audio_path and result.evaluation and result.evaluation.is_valid)
-            detail = result.error or (
-                f"{result.label} · {self._parameter_summary(result.parameters)} · "
-                f"{result.inference_ms:.0f} ms · quality {result.evaluation.technical_quality}"
-                if result.evaluation is not None
-                else result.label
-            )
+            raw_rejected = bool(result.raw_safety and not result.raw_safety.is_safe)
+            if result.error:
+                detail = result.error
+            elif raw_rejected:
+                detail = (
+                    f"{result.label} · {self._text('技术异常', 'Unsafe raw output')}: "
+                    f"{', '.join(result.raw_safety.rejection_reasons)} · "
+                    f"peak {result.raw_safety.peak:.3f} · "
+                    f"clip {result.raw_safety.clipping_ratio:.3%}"
+                )
+            elif result.evaluation is not None:
+                detail = (
+                    f"{result.label} · {self._parameter_summary(result.parameters)} · "
+                    f"{result.inference_ms:.0f} ms · quality {result.evaluation.technical_quality}"
+                )
+            else:
+                detail = result.label
             self.candidate_labels[index].setText(detail)
             self.play_buttons[index].setEnabled(valid)
             self.select_buttons[index].setEnabled(valid)
         if not self._results and self._cancellation.is_set():
             self.status_label.setText(self._text("已安全取消。", "Cancelled safely."))
+        elif self._results and not any(result.audio_path for result in self._results):
+            if self._search is not None:
+                next_round = self._search.skip_unsafe_round()
+                self.status_label.setText(
+                    self._text(
+                        "本阶段候选均因技术异常被淘汰，保留进入阶段前的参数。",
+                        "All candidates were unsafe; keeping the parameters from before this stage.",
+                    )
+                )
+                if next_round is None:
+                    self.apply_button.setEnabled(True)
+                    self.save_button.setEnabled(True)
+                    self.generate_button.setEnabled(False)
+                else:
+                    self._prepare_round()
 
     def _parameter_summary(self, values: BeatriceParameterSet) -> str:
         stage = self._search.current.stage if self._search is not None else ""
-        if stage == "source_pitch":
-            return f"{values.min_source_pitch:.1f}–{values.max_source_pitch:.1f} Hz"
         if stage in ("pitch_coarse", "pitch_fine"):
             return f"Pitch {values.pitch_shift_semitone:+.2f} st"
         if stage == "formant":
@@ -440,7 +476,7 @@ class BeatriceCustomizationDialog(QDialog):
             return
         try:
             self.manager.update_current_parameters(
-                **self._search.final_parameters.to_engine_changes()
+                **self._search.final_parameters.to_assisted_changes()
             )
         except Exception as exc:
             self.status_label.setText(str(exc))

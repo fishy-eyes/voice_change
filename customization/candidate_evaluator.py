@@ -5,7 +5,10 @@ from __future__ import annotations
 import numpy as np
 
 from customization.quality_checker import extract_audio_features, normalize_mono
-from customization.schemas import CandidateEvaluation
+from customization.schemas import CandidateEvaluation, RawCandidateSafetyEvaluation
+
+
+RAW_CANDIDATE_CLIPPING_RATIO_LIMIT = 0.002
 
 
 def _high_frequency_ratio(audio: np.ndarray, sample_rate: int) -> float:
@@ -98,4 +101,78 @@ class CandidateEvaluator:
             duration_ratio=float(duration_ratio),
             high_frequency_ratio=high_frequency_ratio,
             discontinuity_ratio=discontinuity_ratio,
+        )
+
+
+class RawCandidateSafetyEvaluator:
+    """Reject unsafe inference output before audition gain or peak limiting."""
+
+    def __init__(
+        self,
+        *,
+        clipping_ratio_limit: float = RAW_CANDIDATE_CLIPPING_RATIO_LIMIT,
+        technical_evaluator: CandidateEvaluator | None = None,
+    ) -> None:
+        self.clipping_ratio_limit = float(clipping_ratio_limit)
+        self.technical_evaluator = technical_evaluator or CandidateEvaluator()
+
+    def evaluate(
+        self,
+        original: np.ndarray,
+        candidate: np.ndarray,
+        sample_rate: int,
+    ) -> RawCandidateSafetyEvaluation:
+        source = normalize_mono(original)
+        output = normalize_mono(candidate)
+        duration_ratio = len(output) / max(1, len(source))
+        nan_count = int(np.isnan(output).sum())
+        inf_count = int(np.isinf(output).sum())
+        finite = np.isfinite(output)
+        finite_output = output[finite]
+        peak = float(np.max(np.abs(finite_output))) if finite_output.size else 0.0
+        rms = (
+            float(np.sqrt(np.mean(np.square(finite_output, dtype=np.float64))))
+            if finite_output.size
+            else 0.0
+        )
+        clipping_ratio = (
+            float(np.mean(np.abs(finite_output) >= 0.995))
+            if finite_output.size
+            else 0.0
+        )
+        reasons: list[str] = []
+        technical: CandidateEvaluation | None = None
+        silence_ratio = 1.0
+
+        if output.size == 0:
+            reasons.append("raw output is empty")
+        if nan_count or inf_count:
+            reasons.append("raw output contains NaN or Inf")
+        if output.size and not 0.75 <= duration_ratio <= 1.25:
+            reasons.append("raw output length is abnormal")
+        if output.size and finite.all():
+            technical = self.technical_evaluator.evaluate(source, output, sample_rate)
+            silence_ratio = technical.silence_ratio
+            reasons.extend(technical.rejection_reasons)
+        if rms < 0.002:
+            reasons.append("raw output is silent or near-silent")
+        if clipping_ratio > self.clipping_ratio_limit:
+            reasons.append(
+                "raw clipping ratio exceeds "
+                f"{self.clipping_ratio_limit:.3%} safety limit"
+            )
+
+        unique_reasons = tuple(dict.fromkeys(reasons))
+        return RawCandidateSafetyEvaluation(
+            is_safe=not unique_reasons,
+            rejection_reasons=unique_reasons,
+            peak=peak,
+            rms=rms,
+            clipping_ratio=clipping_ratio,
+            nan_count=nan_count,
+            inf_count=inf_count,
+            duration_ratio=float(duration_ratio),
+            silence_ratio=float(silence_ratio),
+            would_clip_on_pcm_output=peak > 1.0,
+            technical_evaluation=technical,
         )

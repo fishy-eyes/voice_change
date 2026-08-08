@@ -44,6 +44,8 @@ config/customization_profiles/*.json
 # Generated outputs
 output/
 outputs/
+experiments/beatrice_quality/outputs/
+experiments/beatrice_quality/results/
 
 # Machine-local external RVC model registry
 config/user_models.json*

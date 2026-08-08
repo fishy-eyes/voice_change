@@ -95,6 +95,21 @@ class CandidateEvaluation:
 
 
 @dataclass(frozen=True)
+class RawCandidateSafetyEvaluation:
+    is_safe: bool
+    rejection_reasons: tuple[str, ...]
+    peak: float
+    rms: float
+    clipping_ratio: float
+    nan_count: int
+    inf_count: int
+    duration_ratio: float
+    silence_ratio: float
+    would_clip_on_pcm_output: bool
+    technical_evaluation: CandidateEvaluation | None = None
+
+
+@dataclass(frozen=True)
 class CandidateResult:
     candidate_id: str
     label: str

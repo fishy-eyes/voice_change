@@ -11,6 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 
 from gui.backend_settings import create_default_registry
+from gui.beatrice_customization_dialog import BeatriceCustomizationDialog
 from gui.i18n import tr
 
 
@@ -80,6 +81,20 @@ class BeatriceGUITests(unittest.TestCase):
         self.assertEqual(tr("en", "beatrice.target_speaker"), "Target Speaker")
         self.assertEqual(tr("zh", "beatrice.target_speaker"), "目标说话人")
         self.assertIn("Beatrice", tr("zh", "beatrice.load_first"))
+        self.assertIn(
+            "Detected Pitch Range",
+            tr("en", "beatrice.detected_pitch_range", low="100", high="200"),
+        )
+        self.assertIn(
+            "保持当前设置",
+            tr(
+                "zh",
+                "beatrice.source_pitch_keep_current",
+                low="30",
+                high="1100",
+            ),
+        )
+        self.assertNotIn("source_pitch", BeatriceCustomizationDialog.STAGE_NAMES)
 
 
 if __name__ == "__main__":

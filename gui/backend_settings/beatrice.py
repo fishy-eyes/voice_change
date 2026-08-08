@@ -22,6 +22,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ai.voice_engine.beatrice import (
+    DEFAULT_MAX_SOURCE_PITCH,
+    DEFAULT_MIN_SOURCE_PITCH,
+)
 from gui.backend_settings.base import BackendSettingsPanel
 from gui.i18n import tr
 
@@ -301,8 +305,14 @@ class BeatriceSettingsPanel(QWidget, BackendSettingsPanel):
         controls = (
             (self.pitch_spin, state.get("pitch_shift_semitone", 0.0)),
             (self.formant_spin, state.get("formant_shift", 0.0)),
-            (self.min_pitch_spin, state.get("min_source_pitch", 30.0)),
-            (self.max_pitch_spin, state.get("max_source_pitch", 1100.0)),
+            (
+                self.min_pitch_spin,
+                state.get("min_source_pitch", DEFAULT_MIN_SOURCE_PITCH),
+            ),
+            (
+                self.max_pitch_spin,
+                state.get("max_source_pitch", DEFAULT_MAX_SOURCE_PITCH),
+            ),
             (self.neighbors_spin, state.get("vq_num_neighbors", 4)),
         )
         for control, value in controls:

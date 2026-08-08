@@ -14,24 +14,39 @@ from typing import Any
 import numpy as np
 import soundfile as sf
 
-from ai.voice_engine.beatrice import BeatriceConfig, BeatriceVoiceEngine
-from customization.candidate_evaluator import CandidateEvaluator
+from ai.voice_engine.beatrice import (
+    BeatriceConfig,
+    BeatriceVoiceEngine,
+    DEFAULT_MAX_SOURCE_PITCH,
+    DEFAULT_MIN_SOURCE_PITCH,
+)
+from customization.candidate_evaluator import (
+    CandidateEvaluator,
+    RawCandidateSafetyEvaluator,
+)
 from customization.candidate_generator import match_audition_level
 from customization.quality_checker import extract_audio_features
-from customization.schemas import CandidateEvaluation
+from customization.schemas import CandidateEvaluation, RawCandidateSafetyEvaluation
 
 
 @dataclass(frozen=True)
 class BeatriceParameterSet:
     target_speaker: int = 0
     pitch_shift_semitone: float = 0.0
-    min_source_pitch: float = 30.0
-    max_source_pitch: float = 1100.0
+    min_source_pitch: float = DEFAULT_MIN_SOURCE_PITCH
+    max_source_pitch: float = DEFAULT_MAX_SOURCE_PITCH
     formant_shift: float = 0.0
     vq_num_neighbors: int = 4
 
     def to_engine_changes(self) -> dict[str, int | float]:
         return asdict(self)
+
+    def to_assisted_changes(self) -> dict[str, int | float]:
+        """Return only fields owned by assisted tuning."""
+        values = self.to_engine_changes()
+        values.pop("min_source_pitch")
+        values.pop("max_source_pitch")
+        return values
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> "BeatriceParameterSet":
@@ -70,6 +85,8 @@ class BeatriceVoiceAnalysis:
     f0_p50: float | None
     f0_p95: float | None
     rms: float
+    voiced_ratio: float = 0.0
+    f0_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -80,6 +97,7 @@ class BeatriceCandidateResult:
     audio_path: str | None
     inference_ms: float
     evaluation: CandidateEvaluation | None = None
+    raw_safety: RawCandidateSafetyEvaluation | None = None
     error: str | None = None
 
 
@@ -87,6 +105,7 @@ class BeatriceCandidateResult:
 class BeatriceSearchRound:
     stage: str
     candidates: list[BeatriceParameterSet]
+    fallback: BeatriceParameterSet
     selected_index: int | None = None
 
 
@@ -98,6 +117,8 @@ def analyze_beatrice_voice(audio: np.ndarray, sample_rate: int) -> BeatriceVoice
         f0_p50=float(np.percentile(f0, 50)) if len(f0) else None,
         f0_p95=float(np.percentile(f0, 95)) if len(f0) else None,
         rms=features.rms,
+        voiced_ratio=features.voiced_frame_ratio,
+        f0_count=int(len(f0)),
     )
 
 
@@ -106,27 +127,6 @@ def metadata_pitch_to_hz(value: float | None) -> float | None:
     if value is None or not math.isfinite(value):
         return None
     return float(440.0 * 2.0 ** ((float(value) - 69.0) / 12.0))
-
-
-def recommend_source_pitch_range(
-    analysis: BeatriceVoiceAnalysis,
-    capabilities: BeatriceTuningCapabilities,
-    *,
-    margin: float = 0.20,
-) -> tuple[float, float] | None:
-    if analysis.f0_p5 is None or analysis.f0_p95 is None:
-        return None
-    low = analysis.f0_p5 * (1.0 - margin)
-    high = analysis.f0_p95 * (1.0 + margin)
-    if capabilities.source_pitch_min is not None:
-        low = max(low, capabilities.source_pitch_min)
-    else:
-        low = max(low, 1.0)
-    if capabilities.source_pitch_max is not None:
-        high = min(high, capabilities.source_pitch_max)
-    if high <= low:
-        return None
-    return float(low), float(high)
 
 
 def recommend_pitch_shift(
@@ -150,7 +150,7 @@ def recommend_pitch_shift(
 class BeatriceParameterSearch:
     """Sequential one-parameter-at-a-time Beatrice search state."""
 
-    STAGES = ("source_pitch", "pitch_coarse", "pitch_fine", "formant", "vq_neighbors")
+    STAGES = ("pitch_coarse", "pitch_fine", "formant", "vq_neighbors")
 
     def __init__(
         self,
@@ -165,7 +165,7 @@ class BeatriceParameterSearch:
         self.history: list[BeatriceSearchRound] = []
         self.final_parameters: BeatriceParameterSet | None = None
         self.cancelled = False
-        self.current = self._round("source_pitch", base)
+        self.current = self._round("pitch_coarse", base)
 
     def cancel(self) -> None:
         self.cancelled = True
@@ -185,25 +185,21 @@ class BeatriceParameterSearch:
         self.current = self._round(self.STAGES[stage_index + 1], selected)
         return self.current
 
+    def skip_unsafe_round(self) -> BeatriceSearchRound | None:
+        """Advance without changing parameters when every candidate is unsafe."""
+        self.history.append(self.current)
+        stage_index = self.STAGES.index(self.current.stage)
+        if stage_index == len(self.STAGES) - 1:
+            self.final_parameters = self.current.fallback
+            return None
+        self.current = self._round(
+            self.STAGES[stage_index + 1], self.current.fallback
+        )
+        return self.current
+
     def _round(self, stage: str, base: BeatriceParameterSet) -> BeatriceSearchRound:
         cap = self.capabilities
-        if stage == "source_pitch":
-            candidates: list[BeatriceParameterSet] = []
-            for margin in (0.10, 0.20, 0.35):
-                recommendation = recommend_source_pitch_range(
-                    self.analysis, cap, margin=margin
-                )
-                if recommendation is not None:
-                    candidates.append(
-                        replace(
-                            base,
-                            min_source_pitch=recommendation[0],
-                            max_source_pitch=recommendation[1],
-                        )
-                    )
-            if not candidates:
-                candidates = [base]
-        elif stage == "pitch_coarse":
+        if stage == "pitch_coarse":
             center = recommend_pitch_shift(
                 self.analysis,
                 self.descriptor,
@@ -241,7 +237,7 @@ class BeatriceParameterSearch:
             candidates = [replace(base, vq_num_neighbors=value) for value in dict.fromkeys(values)]
         else:
             raise ValueError(f"unknown Beatrice search stage: {stage}")
-        return BeatriceSearchRound(stage=stage, candidates=candidates)
+        return BeatriceSearchRound(stage=stage, candidates=candidates, fallback=base)
 
 
 class BeatriceCandidateGenerator:
@@ -256,6 +252,8 @@ class BeatriceCandidateGenerator:
         sample_rate: int = 48_000,
         engine_factory=BeatriceVoiceEngine,
         evaluator: CandidateEvaluator | None = None,
+        raw_safety_evaluator: RawCandidateSafetyEvaluator | None = None,
+        level_matcher=match_audition_level,
     ) -> None:
         self.descriptor = descriptor
         self.runtime_root = Path(runtime_root)
@@ -264,6 +262,10 @@ class BeatriceCandidateGenerator:
         self.sample_rate = int(sample_rate)
         self.engine_factory = engine_factory
         self.evaluator = evaluator or CandidateEvaluator()
+        self.raw_safety_evaluator = (
+            raw_safety_evaluator or RawCandidateSafetyEvaluator()
+        )
+        self.level_matcher = level_matcher
 
     def generate(
         self,
@@ -304,13 +306,20 @@ class BeatriceCandidateGenerator:
                     break
                 converted = np.concatenate(converted_parts) if converted_parts else np.empty(0, dtype=np.float32)
                 elapsed = (perf_counter() - started) * 1000.0
-                evaluation = self.evaluator.evaluate(source, converted, self.sample_rate)
+                raw_safety = self.raw_safety_evaluator.evaluate(
+                    source, converted, self.sample_rate
+                )
+                evaluation = (
+                    self.evaluator.evaluate(source, converted, self.sample_rate)
+                    if raw_safety.is_safe
+                    else raw_safety.technical_evaluation
+                )
                 destination = self.output_directory / f"beatrice_candidate_{index + 1:02d}.wav"
                 audio_path = None
-                if evaluation.is_valid:
+                if raw_safety.is_safe and evaluation is not None and evaluation.is_valid:
                     sf.write(
                         destination,
-                        match_audition_level(source, converted),
+                        self.level_matcher(source, converted),
                         self.sample_rate,
                         subtype="PCM_16",
                     )
@@ -322,6 +331,7 @@ class BeatriceCandidateGenerator:
                     audio_path=audio_path,
                     inference_ms=elapsed,
                     evaluation=evaluation,
+                    raw_safety=raw_safety,
                 )
             except Exception as exc:
                 result = BeatriceCandidateResult(
@@ -357,6 +367,5 @@ __all__ = [
     "analyze_beatrice_voice",
     "metadata_pitch_to_hz",
     "recommend_pitch_shift",
-    "recommend_source_pitch_range",
     "speaker_preset_key",
 ]

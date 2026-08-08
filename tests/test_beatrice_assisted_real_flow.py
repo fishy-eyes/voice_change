@@ -26,12 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_ROOT = PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "runtime"
 PACKAGE_ROOT = PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "model" / "jvs"
 INPUT_WAV = (
-    PROJECT_ROOT
-    / "experiments"
-    / "beatrice_probe"
-    / "assets"
-    / "input"
-    / "common_voice_ja_38833628_16k.wav"
+    PROJECT_ROOT / "tests" / "assets" / "input.wav"
 )
 HAS_ASSETS = (
     (RUNTIME_ROOT / "beatrice" / "__init__.py").is_file()
@@ -49,10 +44,10 @@ class RealBeatriceAssistedTuningTests(unittest.TestCase):
         source = RecordingSession.load_file(INPUT_WAV, 48_000)
         analysis = analyze_beatrice_voice(source, 48_000)
         parameters = BeatriceParameterSet(
-            target_speaker=0,
+            target_speaker=84,
             pitch_shift_semitone=0.0,
-            min_source_pitch=70.0,
-            max_source_pitch=420.0,
+            min_source_pitch=30.0,
+            max_source_pitch=1100.0,
             formant_shift=0.0,
             vq_num_neighbors=4,
         )
@@ -91,6 +86,8 @@ class RealBeatriceAssistedTuningTests(unittest.TestCase):
                 self.assertIsNone(result.error)
                 self.assertIsNotNone(result.evaluation)
                 self.assertTrue(result.evaluation.is_valid, result.evaluation)
+                self.assertIsNotNone(result.raw_safety)
+                self.assertTrue(result.raw_safety.is_safe, result.raw_safety)
                 self.assertIsNotNone(result.audio_path)
                 output, rate = sf.read(result.audio_path, dtype="float32")
                 self.assertEqual(rate, 48_000)
@@ -103,10 +100,15 @@ class RealBeatriceAssistedTuningTests(unittest.TestCase):
                         "parameters": selected.to_engine_changes(),
                         "technical_quality": result.evaluation.technical_quality,
                         "clipping_ratio": result.evaluation.clipping_ratio,
+                        "raw_peak": result.raw_safety.peak,
+                        "raw_clipping_ratio": result.raw_safety.clipping_ratio,
                         "inference_ms": result.inference_ms,
                     }
                 )
                 search.choose(selected_index)
+        self.assertNotIn("source_pitch", [item["stage"] for item in report["stages"]])
+        self.assertEqual(search.final_parameters.min_source_pitch, 30.0)
+        self.assertEqual(search.final_parameters.max_source_pitch, 1100.0)
         print("BEATRICE_ASSISTED_REAL=" + json.dumps(report, sort_keys=True))
 
 

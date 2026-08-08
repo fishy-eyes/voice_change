@@ -11,6 +11,7 @@ from ai.beatrice.model import BeatriceModelManager, REQUIRED_MODEL_FILES
 from ai.voice_engine.beatrice import BeatriceConfig
 from config.local_settings import LocalSettingsStore
 from core.beatrice_runtime import BeatriceRuntime
+from customization.beatrice import BeatriceParameterSet
 from effects.gain import GainEffect
 from effects.manager import EffectManager
 
@@ -156,6 +157,19 @@ class BeatriceApplicationRuntimeTests(unittest.TestCase):
                 vq_num_neighbors=8,
             )
             self.assertEqual(values["target_speaker"], 1)
+            assisted = BeatriceParameterSet(
+                target_speaker=1,
+                pitch_shift_semitone=5.5,
+                formant_shift=2.0,
+                min_source_pitch=30.0,
+                max_source_pitch=1100.0,
+                vq_num_neighbors=8,
+            )
+            after_assisted = first.update_parameters(
+                **assisted.to_assisted_changes()
+            )
+            self.assertEqual(after_assisted["min_source_pitch"], 95.0)
+            self.assertEqual(after_assisted["max_source_pitch"], 410.0)
             self.assertTrue(first.shutdown())
 
             restarted_settings = LocalSettingsStore(settings_path)
@@ -174,6 +188,8 @@ class BeatriceApplicationRuntimeTests(unittest.TestCase):
             self.assertEqual(restored["pitch_shift_semitone"], 5.5)
             self.assertEqual(restored["formant_shift"], 2.0)
             self.assertEqual(restored["vq_num_neighbors"], 8)
+            self.assertEqual(restored["min_source_pitch"], 95.0)
+            self.assertEqual(restored["max_source_pitch"], 410.0)
             alice = second.update_parameters(target_speaker=0)
             self.assertEqual(alice["pitch_shift_semitone"], 1.5)
             self.assertTrue(second.shutdown())

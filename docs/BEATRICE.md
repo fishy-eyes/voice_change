@@ -93,25 +93,56 @@ quality, F0 analysis, technical candidate evaluation, playback, and RMS-level
 matching components used by RVC, while keeping Beatrice's search policy
 separate.
 
-The stages are source-pitch range, pitch coarse, pitch fine, formant, and VQ
-neighbors. F0 analysis uses P5/P50/P95. If the selected speaker has TOML
-`average_pitch`, its MIDI-note value is converted to Hz and the initial pitch
-center is `12 * log2(target/source)`; otherwise the current pitch value is
-used. Source-pitch limits are clamped only when the native runtime explicitly
-publishes limits. Formant and VQ candidates use the loaded converter's
+The stages are pitch coarse, pitch fine, formant, and VQ neighbors. F0 analysis
+retains P5/P50/P95, voiced ratio, and valid-F0 count for recording validation
+and display. If the selected speaker has TOML `average_pitch`, its MIDI-note
+value is converted to Hz and the initial pitch center is
+`12 * log2(target/source_median)`; otherwise the current pitch value is used.
+F0 percentiles are not used to derive or apply a source-pitch range.
+
+Assisted tuning preserves the user's current Source Pitch Low/High values and
+does not search or overwrite them. The shared safe default is 30--1100 Hz when
+no valid setting exists. Manual controls and speaker-specific presets remain
+available. Formant and VQ candidates use the loaded converter's
 `max_formant_shift` and `codebook_size`.
 
 Candidate generation pauses the realtime audio stream. Every option owns a
 fresh converter, stateful resamplers, and FIFOs, so no candidate can inherit
 history from another or from the realtime stream. Cancellation is checked only
-after the active native conversion call returns. Candidate WAVs are RMS-matched
-for fair playback; automatic checks reject only empty, non-finite, clipped,
-silent, discontinuous, or otherwise technically invalid output. The user—not
-an automatic similarity score—chooses the preferred voice.
+after the active native conversion call returns. Raw inference output is
+evaluated before RMS matching or PCM save. The gate records peak, RMS, clipping
+ratio, non-finite values, silence, and length ratio; clipping above 0.2% is
+rejected. An isolated peak above 1.0 is flagged as potentially clipping on PCM
+output but is not rejected by peak alone. Only safe candidates are RMS-matched
+for fair playback. The user—not an automatic similarity score—chooses the
+preferred voice.
 
 Final values are saved in ignored local settings under a key derived from the
 model package metadata identity and target speaker. They are restored when
-that speaker is loaded after a restart; model TOML/bin files are never edited.
+that speaker is loaded after a restart. Assisted tuning does not overwrite the
+speaker's existing Source Pitch values; model TOML/bin files are never edited.
+
+## Validated quality findings
+
+- Human listening found no material difference between native offline output
+  and the production streaming QQ path. Objective alignment was also very
+  close (correlation about 0.9999 with low RMSE), so there is currently no
+  evidence that QQ, the streaming adapter, Worker, or buffering is the main
+  source of persistent metallic artifacts or unclear speech.
+- A 30--1100 Hz Source Pitch range sounded clearly better than the former
+  input-F0-percentile-derived narrow range. The narrow range also produced
+  severe output-F0 displacement and clipping in diagnostics, so production no
+  longer narrows Source Pitch automatically.
+- With the wide Source Pitch range, intelligent pitch recommendation plus
+  coarse/fine listening selection produced a clear improvement and remains in
+  the assisted flow. Formant and VQ remain available as secondary fine-tuning
+  controls, although their improvement was less pronounced in the current JVS
+  experiment.
+- With per-speaker pitch, jvs010, jvs030, and jvs050 were preferred over
+  jvs001 and jvs080 in the current listening comparison. Mandarin articulation
+  is still imperfect; current evidence does not distinguish JVS Japanese-data
+  adaptation from source-recording or microphone quality, and does not prove
+  that JVS is unsuitable for Mandarin.
 
 ## Validation
 
