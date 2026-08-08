@@ -14,8 +14,8 @@ from ai.voice_worker import VoiceConversionWorker
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_RUNTIME = PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "runtime"
-DEFAULT_PACKAGE = PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "model" / "jvs"
+DEFAULT_RUNTIME = PROJECT_ROOT / "local_assets" / "beatrice" / "runtimes" / "probe-runtime"
+DEFAULT_PACKAGE = PROJECT_ROOT / "local_assets" / "beatrice" / "models" / "jvs"
 RUNTIME_ROOT = Path(os.environ.get("VOICE_CHANGE_BEATRICE_RUNTIME_DIR", DEFAULT_RUNTIME))
 PACKAGE_ROOT = Path(os.environ.get("VOICE_CHANGE_BEATRICE_MODEL_PACKAGE", DEFAULT_PACKAGE))
 HAS_ASSETS = (

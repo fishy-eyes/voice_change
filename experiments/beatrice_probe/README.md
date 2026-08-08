@@ -85,23 +85,23 @@ rc0 JVS 样例总大小 42,340,561 bytes，版本 `2.0.0-rc.0`，含 100 个目�
 - 未安装 ONNX / ONNX Runtime
 - 未安装或升级任何包；基准资源统计也只使用标准库和 Windows API
 
-环境快照是本地生成结果，应写入已忽略的 `results/`，不提交机器路径。
+环境快照是本地生成结果，应写入已忽略的 `local_assets/beatrice/generated/beatrice_probe/results/`，不提交机器路径。
 
 ## 本地资产
 
-`.gitignore` 排除了以下研究资产：
+根目录 `.gitignore` 排除了整个 `local_assets/`。本探针使用：
 
-- `assets/runtime/`：从官方 VCClient std_win 2.2.2-beta 提取的 Beatrice 运行时
-- `assets/model/`：官方 rc0 JVS 样例模型
-- `results/`：机器相关 JSON
-- `outputs/`：根仓库规则已忽略 WAV
+- `local_assets/beatrice/runtimes/probe-runtime/`：从官方 VCClient std_win 2.2.2-beta 提取的 Beatrice 运行时
+- `local_assets/beatrice/models/`：官方 rc0 JVS 及其他本地样例模型
+- `local_assets/beatrice/audio/`：不进入 Git 的输入录音
+- `local_assets/beatrice/generated/beatrice_probe/`：输出 WAV 和机器相关结果
 
 下载件校验值：
 
 - `vcclient_std_win_2.2.2-beta_only_beatrice.zip`: SHA256 `CA7DD6E1255277667AD6EF2128C1FBBFF0FAE3F19E96AA86C2F59CF75040A150`
 - `beatrice_2.0.0-rc.0_20250824.zip`: SHA256 `48DAB9C4DE25C66FC21D8B54B6ADEC784B1F521800AC26CA45D0FE6BAA6D26A8`
 
-固定输入 `assets/input/common_voice_ja_38833628_16k.wav` 来自 Trainer 官方测试资产，mono 16 kHz、5.58 秒；它同样只保留在本地，不纳入 Git。
+固定输入 `local_assets/beatrice/audio/common_voice_ja_38833628_16k.wav` 来自 Trainer 官方测试资产，mono 16 kHz、5.58 秒；它同样只保留在本地，不纳入 Git。
 
 ## 运行命令
 
@@ -110,36 +110,38 @@ rc0 JVS 样例总大小 42,340,561 bytes，版本 `2.0.0-rc.0`，含 100 个目�
 ```powershell
 $python = 'python'
 $probe = 'experiments\beatrice_probe'
+$local = 'local_assets\beatrice'
+$generated = "$local\generated\beatrice_probe"
 
 & $python -u "$probe\inspect_runtime.py" `
-  --runtime-root "$probe\assets\runtime" `
-  --snapshot "$probe\results\environment_after.txt"
+  --runtime-root "$local\runtimes\probe-runtime" `
+  --snapshot "$generated\results\environment_after.txt"
 
 & $python -u "$probe\inspect_model.py" `
-  "$probe\assets\model\jvs" `
-  --runtime-root "$probe\assets\runtime" `
+  "$local\models\jvs" `
+  --runtime-root "$local\runtimes\probe-runtime" `
   --load-runtime `
-  --json-out "$probe\results\model_inspection.json"
+  --json-out "$generated\results\model_inspection.json"
 
 & $python -u "$probe\infer_wav.py" `
-  --model "$probe\assets\model\jvs" `
-  --runtime-root "$probe\assets\runtime" `
-  --input "$probe\assets\input\common_voice_ja_38833628_16k.wav" `
+  --model "$local\models\jvs" `
+  --runtime-root "$local\runtimes\probe-runtime" `
+  --input "$local\audio\common_voice_ja_38833628_16k.wav" `
   --output beatrice_jvs001.wav `
   --target-speaker 0 `
-  --json-out "$probe\results\inference.json"
+  --json-out "$generated\results\inference.json"
 
 & $python -u "$probe\benchmark.py" `
-  --model "$probe\assets\model\jvs" `
-  --runtime-root "$probe\assets\runtime" `
-  --input "$probe\assets\input\common_voice_ja_38833628_16k.wav" `
+  --model "$local\models\jvs" `
+  --runtime-root "$local\runtimes\probe-runtime" `
+  --input "$local\audio\common_voice_ja_38833628_16k.wav" `
   --target-speaker 0 `
   --warmup-blocks 100 `
   --repeats 3 `
-  --json-out "$probe\results\benchmark.json"
+  --json-out "$generated\results\benchmark.json"
 ```
 
-`infer_wav.py` 强制输出只能位于本探针的 `outputs/` 下，并在写入前后检查 NaN、Inf、全零、严重削波和时长偏差。
+`infer_wav.py` 强制输出只能位于 `local_assets/beatrice/generated/beatrice_probe/outputs/` 下，并在写入前后检查 NaN、Inf、全零、严重削波和时长偏差。
 
 ## 实测结果
 

@@ -22,9 +22,11 @@ from scipy.signal import resample_poly
 
 
 PROBE_DIR = Path(__file__).resolve().parent
-ASSETS_DIR = PROBE_DIR / "assets"
-OUTPUTS_DIR = PROBE_DIR / "outputs"
-RESULTS_DIR = PROBE_DIR / "results"
+REPO_ROOT = PROBE_DIR.parents[1]
+LOCAL_BEATRICE_ROOT = REPO_ROOT / "local_assets" / "beatrice"
+GENERATED_DIR = LOCAL_BEATRICE_ROOT / "generated" / "beatrice_probe"
+OUTPUTS_DIR = GENERATED_DIR / "outputs"
+RESULTS_DIR = GENERATED_DIR / "results"
 
 REQUIRED_MODEL_FILES = (
     "phone_extractor.bin",

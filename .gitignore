@@ -12,6 +12,9 @@ venv/
 dist/
 build/
 
+# Developer-local third-party runtimes, models, recordings, and experiment output
+local_assets/
+
 # IDE
 .vscode/
 .idea/
@@ -48,8 +51,7 @@ config/customization_profiles/*.json
 # Generated outputs
 output/
 outputs/
-experiments/beatrice_quality/outputs/
-experiments/beatrice_quality/results/
+results/
 experiments/**/outputs/
 experiments/**/results/
 

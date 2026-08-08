@@ -84,13 +84,21 @@ Development and test dependencies are in `requirements-dev.txt`.
 The project includes the RVC inference source under `rvc_source/`, but does not
 include model weights. Provide these local assets:
 
+For a source checkout, keep the ignored binary assets under:
+
 ```text
-rvc_models/
-├── hubert/
-│   ├── config.json
-│   └── pytorch_model.bin
-└── rmvpe/
-    └── rmvpe.pt
+local_assets/rvc/
+├── foundation_models/
+│   ├── hubert/
+│   │   ├── config.json
+│   │   └── pytorch_model.bin
+│   └── rmvpe/
+│       └── rmvpe.pt
+└── voice_models/
+    └── <voice>/
+        ├── model.pth
+        ├── model.index       # optional
+        └── profile.json      # optional
 ```
 
 Import an RVC voice folder from the GUI. It must contain one `.pth` model and
@@ -101,7 +109,13 @@ Advanced path overrides remain available:
 
 - `VOICE_CHANGE_RVC_SOURCE_DIR`
 - `VOICE_CHANGE_RVC_MODELS_DIR`
+- `VOICE_CHANGE_RVC_VOICE_MODELS_DIR`
 - `VOICE_CHANGE_RVC_DEFAULT_MODEL`
+
+The frozen Windows application intentionally retains its public
+`rvc_models/` and `models/rvc/` folders. This keeps the released package and
+existing installations compatible while source-development assets stay under
+`local_assets/`.
 
 ## Configure Beatrice v2
 
@@ -136,6 +150,10 @@ The repository intentionally excludes:
 - benchmark outputs, result JSON, caches, and logs
 
 Do not commit third-party Runtime or model assets when adding experiments.
+Source-checkout RVC defaults and developer Beatrice assets are organized under
+the fully ignored `local_assets/` tree described in
+`docs/PROJECT_STRUCTURE.md`. The GUI continues to accept arbitrary external
+Runtime and voice-model paths.
 
 ## Main controls
 
@@ -161,12 +179,20 @@ customization/      recording analysis, candidate search, evaluation, and profil
 effects/            stable AI adapter, final gain, and ordered effect manager
 gui/                PySide6 main window and backend-specific settings panels
 docs/                detailed technical documentation
-experiments/         source-only probes and quality tools; local assets are ignored
-models/              model profile locations; binary model assets are ignored
+experiments/         source-only probes, methods, and quality tools
+local_assets/        ignored developer-local Runtime/model/audio/generated data
+models/              packaged-app model placeholders and portable documentation
 packaging/           maintained Windows packaging metadata and scripts
 rvc_source/          vendored MIT-licensed RVC inference source
 tests/               unit, integration, GUI, real-model, and benchmark checks
 ```
+
+In a source checkout, RVC voice models and shared foundation weights live under
+`local_assets/rvc/`. The Windows package keeps `models/rvc/` and
+`rvc_models/` as its user-facing installation layout. A Beatrice model may be
+registered from `models/beatrice/` or any external folder; its Runtime is a
+separate dependency and never belongs under `models/`. See
+`docs/PROJECT_STRUCTURE.md` for the complete ownership rules.
 
 ## Validation
 
@@ -185,6 +211,6 @@ reported as a successful real-device test.
 
 ## Release scope
 
-`v2.0.0` is the first stable multi-backend source baseline. It is a Git source
-tag only: no Windows installer, proprietary Runtime, model archive, or GitHub
-Release asset is published as part of this source milestone.
+`v2.0.0` is the first stable multi-backend source baseline. Its GitHub Release
+includes the validated Windows x64 application archive, but no proprietary
+Beatrice Runtime or user/foundation model files are redistributed.

@@ -19,13 +19,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_ROOT = Path(
     os.environ.get(
         "VOICE_CHANGE_BEATRICE_RUNTIME_DIR",
-        PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "runtime",
+        PROJECT_ROOT / "local_assets" / "beatrice" / "runtimes" / "probe-runtime",
     )
 )
 PACKAGE_ROOT = Path(
     os.environ.get(
         "VOICE_CHANGE_BEATRICE_MODEL_PACKAGE",
-        PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "model" / "jvs",
+        PROJECT_ROOT / "local_assets" / "beatrice" / "models" / "jvs",
     )
 )
 RUN_BENCHMARK = os.environ.get("RUN_BEATRICE_FORMAL_BENCHMARK") == "1"

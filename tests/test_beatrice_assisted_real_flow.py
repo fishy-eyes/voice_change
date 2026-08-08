@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import json
+import os
+from pathlib import Path
 import tempfile
 import unittest
 
@@ -23,8 +24,10 @@ from ai.voice_engine.beatrice import BeatriceVoiceEngine
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-RUNTIME_ROOT = PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "runtime"
-PACKAGE_ROOT = PROJECT_ROOT / "experiments" / "beatrice_probe" / "assets" / "model" / "jvs"
+DEFAULT_RUNTIME = PROJECT_ROOT / "local_assets" / "beatrice" / "runtimes" / "probe-runtime"
+DEFAULT_PACKAGE = PROJECT_ROOT / "local_assets" / "beatrice" / "models" / "jvs"
+RUNTIME_ROOT = Path(os.environ.get("VOICE_CHANGE_BEATRICE_RUNTIME_DIR", DEFAULT_RUNTIME))
+PACKAGE_ROOT = Path(os.environ.get("VOICE_CHANGE_BEATRICE_MODEL_PACKAGE", DEFAULT_PACKAGE))
 INPUT_WAV = (
     PROJECT_ROOT / "tests" / "assets" / "input.wav"
 )
