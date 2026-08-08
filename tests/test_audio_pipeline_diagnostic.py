@@ -2,8 +2,7 @@
 
 Run from the project root:
 
-    E:\\Anaconda\\envs\\voice_change\\python.exe \
-        tests\\test_audio_pipeline_diagnostic.py
+    python -u tests\\test_audio_pipeline_diagnostic.py
 
 The default run records ten seconds through the same duplex PortAudio settings
 used by :class:`audio.stream.AudioStream`.  Every diagnostic stage is copied

@@ -79,13 +79,13 @@ rc0 JVS 样例总大小 42,340,561 bytes，版本 `2.0.0-rc.0`，含 100 个目�
 
 ## 当前环境
 
-- Python: `E:\Anaconda\envs\voice_change\python.exe`, 3.11.15
+- Python 3.11.15
 - NumPy 1.26.4, SciPy 1.17.1, SoundFile 0.14.0, librosa 0.11.0
 - Torch/Torchaudio 2.1.2+cu121；CUDA 可用，RTX 4060 Laptop，cuDNN 8801
 - 未安装 ONNX / ONNX Runtime
 - 未安装或升级任何包；基准资源统计也只使用标准库和 Windows API
 
-完整前后快照见 `environment_before.txt` 和 `environment_after.txt`。
+环境快照是本地生成结果，应写入已忽略的 `results/`，不提交机器路径。
 
 ## 本地资产
 
@@ -108,12 +108,12 @@ rc0 JVS 样例总大小 42,340,561 bytes，版本 `2.0.0-rc.0`，含 100 个目�
 从仓库根目录执行：
 
 ```powershell
-$python = 'E:\Anaconda\envs\voice_change\python.exe'
+$python = 'python'
 $probe = 'experiments\beatrice_probe'
 
 & $python -u "$probe\inspect_runtime.py" `
   --runtime-root "$probe\assets\runtime" `
-  --snapshot "$probe\environment_after.txt"
+  --snapshot "$probe\results\environment_after.txt"
 
 & $python -u "$probe\inspect_model.py" `
   "$probe\assets\model\jvs" `

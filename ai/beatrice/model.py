@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Mapping
 import tomllib
 
 from loguru import logger

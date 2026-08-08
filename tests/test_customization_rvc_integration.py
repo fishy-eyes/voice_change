@@ -3,7 +3,7 @@
 Run explicitly with:
 
     $env:RUN_RVC_CUSTOMIZATION_INTEGRATION = "1"
-    E:\Anaconda\envs\voice_change\python.exe -m unittest \
+python -m unittest \
         tests.test_customization_rvc_integration -v
 
 The test is skipped during ordinary unit-test runs because it loads the real

@@ -12,6 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
 
+from config.settings import APP_VERSION
 from effects.base import BaseEffect
 from effects.gain import GainEffect
 from gui.main_window import MainWindow
@@ -87,6 +88,7 @@ class OutputGainTests(unittest.TestCase):
             self.assertEqual(manager.get_by_name("GainEffect").gain, 2.5)
             self.assertNotIn("Echo", window.windowTitle())
             self.assertNotIn("Robot", window.windowTitle())
+            self.assertIn(f"v{APP_VERSION}", window.windowTitle())
         finally:
             window.close()
 

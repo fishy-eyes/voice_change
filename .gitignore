@@ -24,12 +24,16 @@ logs/
 *.wav
 *.mp3
 *.m4a
+*.flac
 
 # RVC model files
 *.pth
 *.pt
 *.index
 *.safetensors
+*.bin
+*.pyd
+*.dll
 rvc_models/
 
 # Machine-local external Beatrice runtime/model packages
@@ -46,6 +50,8 @@ output/
 outputs/
 experiments/beatrice_quality/outputs/
 experiments/beatrice_quality/results/
+experiments/**/outputs/
+experiments/**/results/
 
 # Machine-local external RVC model registry
 config/user_models.json*

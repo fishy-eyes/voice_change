@@ -173,7 +173,7 @@ Audio callback
 ## 命令
 
 ```powershell
-$python = 'E:\Anaconda\envs\voice_change\python.exe'
+$python = 'python'
 $probe = 'experiments\beatrice_probe'
 
 & $python -u "$probe\test_streaming_adapter.py"

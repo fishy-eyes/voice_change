@@ -33,7 +33,6 @@ from config.settings import (
     GAIN_VALUE,
     INPUT_DEVICE,
     RVC_USER_MODELS_FILE,
-    RVC_DEFAULT_MODEL,
     RVC_MODEL_LIBRARY_DIR,
     RVC_SOURCE_DIR,
     SHOW_DEVICE_LIST,

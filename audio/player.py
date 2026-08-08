@@ -2,8 +2,6 @@
 
 from typing import Optional
 
-from loguru import logger
-
 from config.settings import SAMPLE_RATE, CHANNELS, BLOCKSIZE, DTYPE, LATENCY
 
 

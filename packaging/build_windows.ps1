@@ -22,7 +22,7 @@ try {
         throw "PyInstaller failed with exit code $LASTEXITCODE"
     }
 
-    $appDirectory = Join-Path $repoRoot "dist\VoiceChanger-v1.0.0"
+    $appDirectory = Join-Path $repoRoot "dist\VoiceChanger-v2.0.0"
     $hubertDirectory = Join-Path $appDirectory "rvc_models\hubert"
     $rmvpeDirectory = Join-Path $appDirectory "rvc_models\rmvpe"
     $voiceDirectory = Join-Path $appDirectory "models\rvc"
@@ -34,7 +34,7 @@ try {
     Copy-Item packaging\RMVPE-README.txt (Join-Path $rmvpeDirectory "README.txt") -Force
     Copy-Item packaging\VoiceModels-README.txt (Join-Path $voiceDirectory "README.txt") -Force
 
-    $archive = Join-Path $repoRoot "dist\voice_change-v1.0.0-windows-x64.tar.xz"
+    $archive = Join-Path $repoRoot "dist\voice_change-v2.0.0-windows-x64.tar.xz"
     if (Test-Path -LiteralPath $archive) {
         Remove-Item -LiteralPath $archive -Force
     }

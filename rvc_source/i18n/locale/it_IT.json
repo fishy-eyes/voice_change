@@ -8,7 +8,6 @@
     "A模型路径": "Percorso per il modello A:",
     "B模型路径": "Percorso per il modello B:",
     "CUDA可用：%s": "CUDA disponibile: %s",
-    "E:\\语音音频+标注\\米津玄师\\src": "C:\\Users\\Desktop\\src",
     "F0与HuBERT特征提取": "Estrazione F0 e caratteristiche HuBERT",
     "F0提取": "Estrazione F0",
     "F0曲线文件, 可选, 一行一个音高, 代替默认F0及升降调": "File curva F0 (opzionale). ",

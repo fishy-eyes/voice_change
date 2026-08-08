@@ -1,10 +1,10 @@
-Voice Changer v1.0.0 - Windows x64
+Voice Changer v2.0.0 - Windows x64
 ====================================
 
 Start
 -----
 Run VoiceChanger.exe. The application can start with the base effects before
-RVC assets are installed. Runtime logs are written to logs\voice_change.log.
+backend assets are installed. Runtime logs are written to logs\voice_change.log.
 
 Required RVC assets
 -------------------
@@ -19,6 +19,12 @@ The public release intentionally does not redistribute model weights.
 
 3. Import an RVC voice folder from the GUI. The folder must contain a .pth
    model and may contain a matching .index and profile.json.
+
+Optional Beatrice v2 backend
+-----------------------------
+The proprietary Beatrice Runtime and Beatrice model packages are not included.
+Select their local folders from the GUI. The application registers external
+paths and does not copy or delete those assets.
 
 Advanced path overrides
 -----------------------

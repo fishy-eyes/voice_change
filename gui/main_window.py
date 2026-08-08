@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from config.settings import APP_VERSION
 from gui.device_settings_dialog import DeviceSettingsDialog
 from gui.i18n import tr
 from gui.self_monitor_panel import SelfMonitorPanel
@@ -362,7 +363,7 @@ class MainWindow(QMainWindow):
         self._voice_panel.update_status()
 
     def _apply_language(self) -> None:
-        self.setWindowTitle(self._t("control.title"))
+        self.setWindowTitle(f"{self._t('control.title')} v{APP_VERSION}")
         self._app_title_label.setText(self.windowTitle())
         self._language_button.setText(self._t("control.language_switch"))
         self._audio_group.setTitle(self._t("control.audio_group"))

@@ -12,6 +12,20 @@ import utils.logger as app_logger
 
 
 class ReleasePortabilityTests(unittest.TestCase):
+    def test_v2_version_metadata_is_consistent(self) -> None:
+        self.assertEqual(settings.APP_VERSION, "2.0.0")
+        project_root = Path(__file__).resolve().parents[1]
+        expected = "2.0.0"
+        for relative in (
+            "README.md",
+            "packaging/README-Windows.txt",
+            "packaging/version_info.txt",
+            "packaging/voice_change.spec",
+            "packaging/build_windows.ps1",
+        ):
+            content = (project_root / relative).read_text(encoding="utf-8")
+            self.assertIn(expected, content, relative)
+
     def test_frozen_application_root_is_executable_directory(self) -> None:
         executable = Path("C:/portable/VoiceChanger/VoiceChanger.exe")
         with (

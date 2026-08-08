@@ -5,7 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from config.settings import APP_NAME, LOG_LEVEL, PROJECT_ROOT
+from config.settings import APP_NAME, APP_VERSION, LOG_LEVEL, PROJECT_ROOT
 
 _configured = False
 
@@ -36,5 +36,5 @@ def setup_logger() -> None:
         retention=5,
         encoding="utf-8",
     )
-    logger.info("{} 日志系统已就绪", APP_NAME)
+    logger.info("{} v{} 日志系统已就绪", APP_NAME, APP_VERSION)
     _configured = True

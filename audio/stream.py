@@ -10,7 +10,6 @@ from loguru import logger
 from audio.recorder import AudioRecorder
 from audio.player import AudioPlayer
 from audio.device_manager import DeviceManager
-from config.settings import SAMPLE_RATE, CHANNELS, BLOCKSIZE, DTYPE
 from effects.manager import EffectManager
 
 ProcessFunc = Callable[[np.ndarray, int, object, object], np.ndarray]

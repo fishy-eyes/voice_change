@@ -106,5 +106,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="VoiceChanger-v1.0.0",
+    name="VoiceChanger-v2.0.0",
 )

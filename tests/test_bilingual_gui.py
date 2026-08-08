@@ -26,7 +26,9 @@ class BilingualMainWindowTests(unittest.TestCase):
             self.assertTrue(hasattr(window._voice_panel, "settings_button"))
             self.assertEqual(window._gain_group.title(), "输出音量")
             window._toggle_language()
-            self.assertEqual(window.windowTitle(), "Realtime AI Voice Control Center")
+            self.assertEqual(
+                window.windowTitle(), "Realtime AI Voice Control Center v2.0.0"
+            )
             self.assertEqual(window._start_button.text(), "Start Audio")
             self.assertEqual(window._gain_group.title(), "Output Gain")
             window._toggle_language()

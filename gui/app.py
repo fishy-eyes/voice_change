@@ -14,6 +14,8 @@ import sys
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from PySide6.QtWidgets import QApplication
+
+from config.settings import APP_NAME, APP_VERSION
 from gui.main_window import MainWindow
 
 if TYPE_CHECKING:
@@ -40,7 +42,8 @@ def create_app(
         The app instance and the main window.
     """
     app = QApplication(argv or sys.argv)
-    app.setApplicationName("Voice Changer")
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     window = MainWindow(context=context)
     window.show()
     return app, window

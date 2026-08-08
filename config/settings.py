@@ -21,6 +21,7 @@ LATENCY: str = "low"               # "low" 让 PortAudio 选设备最低延迟
 # ---- 应用 ----
 LOG_LEVEL: str = "DEBUG"
 APP_NAME: str = "Voice Changer"
+APP_VERSION: str = "2.0.0"
 
 # ---- 设备配置 ----
 INPUT_DEVICE: int | None = None            # 输入设备索引，None = 系统默认

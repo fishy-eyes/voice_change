@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from loguru import logger
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
