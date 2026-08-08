@@ -58,7 +58,17 @@ def _application_root() -> Path:
 
 PROJECT_ROOT: Path = _application_root()
 BUNDLE_ROOT: Path = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT)).resolve()
-RVC_MODEL_LIBRARY_DIR: str = str(PROJECT_ROOT / "models" / "rvc")
+IS_FROZEN: bool = bool(getattr(sys, "frozen", False))
+LOCAL_ASSETS_ROOT: Path = PROJECT_ROOT / "local_assets"
+_DEFAULT_RVC_MODEL_LIBRARY_DIR = (
+    PROJECT_ROOT / "models" / "rvc"
+    if IS_FROZEN
+    else LOCAL_ASSETS_ROOT / "rvc" / "voice_models"
+)
+RVC_MODEL_LIBRARY_DIR: str = os.environ.get(
+    "VOICE_CHANGE_RVC_VOICE_MODELS_DIR",
+    str(_DEFAULT_RVC_MODEL_LIBRARY_DIR),
+)
 RVC_DEFAULT_MODEL: str = (
     os.environ.get("VOICE_CHANGE_RVC_DEFAULT_MODEL", "modelF").strip() or "modelF"
 )
@@ -66,10 +76,14 @@ RVC_USER_MODELS_FILE: str = str(PROJECT_ROOT / "config" / "user_models.json")
 
 _DEFAULT_RVC_SOURCE_DIR = (
     BUNDLE_ROOT / "rvc_source"
-    if getattr(sys, "frozen", False)
+    if IS_FROZEN
     else PROJECT_ROOT / "rvc_source"
 )
-_DEFAULT_RVC_MODELS_DIR = PROJECT_ROOT / "rvc_models"
+_DEFAULT_RVC_MODELS_DIR = (
+    PROJECT_ROOT / "rvc_models"
+    if IS_FROZEN
+    else LOCAL_ASSETS_ROOT / "rvc" / "foundation_models"
+)
 RVC_SOURCE_DIR: str = os.environ.get(
     "VOICE_CHANGE_RVC_SOURCE_DIR", str(_DEFAULT_RVC_SOURCE_DIR)
 )

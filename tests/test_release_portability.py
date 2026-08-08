@@ -44,8 +44,24 @@ class ReleasePortabilityTests(unittest.TestCase):
         )
         self.assertEqual(
             Path(settings.RVC_MODELS_DIR),
-            settings.PROJECT_ROOT / "rvc_models",
+            settings.PROJECT_ROOT
+            / "local_assets"
+            / "rvc"
+            / "foundation_models",
         )
+        self.assertEqual(
+            Path(settings.RVC_MODEL_LIBRARY_DIR),
+            settings.PROJECT_ROOT / "local_assets" / "rvc" / "voice_models",
+        )
+
+    def test_windows_package_keeps_public_rvc_asset_layout(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        build_script = (project_root / "packaging" / "build_windows.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"rvc_models\\hubert"', build_script)
+        self.assertIn('"rvc_models\\rmvpe"', build_script)
+        self.assertIn('"models\\rvc"', build_script)
 
     @patch("main.DeviceManager.select_output_device")
     @patch("main.DeviceManager.find_virtual_output_device", return_value=None)

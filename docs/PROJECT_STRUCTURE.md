@@ -27,18 +27,22 @@ the desktop application from starting.
 
 ## Model and Runtime roles
 
-- `models/rvc/` is the default user RVC voice-model location. Each model has a
-  `.pth`, optional `.index`, and optional portable profile metadata.
+- `local_assets/rvc/voice_models/` is the source-checkout default for RVC
+  voice models. Each model has a `.pth`, optional `.index`, and optional
+  portable profile metadata.
 - `models/beatrice/` is an optional user Beatrice package location. The GUI can
   register any external package folder, so this directory is not mandatory.
-- `rvc_models/hubert/` and `rvc_models/rmvpe/` contain the shared foundation
-  weights required by RVC inference. They are not user voice models.
+- `local_assets/rvc/foundation_models/hubert/` and `rmvpe/` contain the shared
+  foundation weights required by source-checkout RVC inference. They are not
+  user voice models.
 - A Beatrice Runtime is executable third-party code, not a model. It stays
   outside `models/` and is selected through the GUI, local settings, or the
   documented environment variable.
 
-The established names are intentionally retained because changing them would
-break loaders, profiles, packaging paths, and existing user installations.
+The frozen Windows application retains `models/rvc/` and `rvc_models/` as its
+public installation layout. Source and frozen defaults are selected in
+`config/settings.py`; environment overrides remain available. This separation
+avoids breaking packaging paths and existing user installations.
 
 ## Developer-local assets
 
@@ -53,15 +57,20 @@ local_assets/
     audio/
     generated/
   rvc/
-    models/
+    foundation_models/
+      hubert/
+      rmvpe/
+    voice_models/
 ```
 
-The current local Beatrice probe defaults use
+The source application defaults to `local_assets/rvc/foundation_models/` and
+`local_assets/rvc/voice_models/`. The current local Beatrice probe defaults use
 `local_assets/beatrice/runtimes/probe-runtime/` and
 `local_assets/beatrice/models/jvs/`. Users remain free to keep assets anywhere
-and register those paths in the GUI. Real Runtime files, model weights,
-recordings, generated WAV files, reports, and machine paths must never be
-staged.
+and register those paths in the GUI. `rvc_source/` remains tracked because it
+is required to reproduce and package inference; it is source code, not a
+machine-local Runtime asset. Real Runtime files, model weights, recordings,
+generated WAV files, reports, and machine paths must never be staged.
 
 ## Generated and machine-local state
 
