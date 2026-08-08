@@ -30,7 +30,7 @@ def main() -> int:
     parser.add_argument(
         "--output",
         required=True,
-        help="Output filename or path beneath experiments/beatrice_probe/outputs",
+        help="Output filename or path beneath local_assets/beatrice/generated/beatrice_probe/outputs",
     )
     parser.add_argument("--runtime-root", help="Directory containing the beatrice package")
     parser.add_argument("--target-speaker", type=int, default=0)

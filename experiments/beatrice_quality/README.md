@@ -15,8 +15,10 @@ parameters, or saved application presets.
 - Parameter sweeps: one variable at a time
 - Speaker sweep: `jvs001`, `jvs010`, `jvs030`, `jvs050`, `jvs080`
 
-The local model and runtime default to the already ignored research assets in
-`experiments/beatrice_probe/assets/`. Override them explicitly when needed.
+The local model and runtime default to the fully ignored developer assets in
+`local_assets/beatrice/models/` and
+`local_assets/beatrice/runtimes/probe-runtime/`. Override them explicitly when
+needed.
 
 ```powershell
 python -m experiments.beatrice_quality.run_quality_matrix
@@ -29,8 +31,9 @@ wide-range assisted-tuning checkpoints with:
 python -m experiments.beatrice_quality.run_wide_assisted_preview
 ```
 
-Generated WAV and machine-specific reports are written to ignored `outputs/`
-and `results/` directories. The original input is never overwritten.
+Generated WAV and machine-specific reports are written below ignored
+`local_assets/beatrice/generated/beatrice_quality/`. The original input is
+never overwritten.
 
 ## Interpretation limits
 

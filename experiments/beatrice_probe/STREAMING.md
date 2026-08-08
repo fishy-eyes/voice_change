@@ -126,8 +126,8 @@ QQ 是 soxr 的低延迟快速模式，滤波质量低于 LQ/HQ。自动对齐�
 
 ## 输出与人工 A/B
 
-- 离线连续输出：`outputs/beatrice_jvs001.wav`，24 kHz。
-- callback 模拟输出：`outputs/streaming_beatrice.wav`，48 kHz，开头含 16 ms 明确启动静音。
+- 离线连续输出：`local_assets/beatrice/generated/beatrice_probe/outputs/beatrice_jvs001.wav`，24 kHz。
+- callback 模拟输出：`local_assets/beatrice/generated/beatrice_probe/outputs/streaming_beatrice.wav`，48 kHz，开头含 16 ms 明确启动静音。
 
 自动检查：shape/dtype 正确，无 NaN/Inf，非全零，无削波，保存并回读成功。streaming 文件较原始输入多 192 个 callback padding samples，即 4 ms。
 
@@ -175,18 +175,20 @@ Audio callback
 ```powershell
 $python = 'python'
 $probe = 'experiments\beatrice_probe'
+$local = 'local_assets\beatrice'
+$generated = "$local\generated\beatrice_probe"
 
 & $python -u "$probe\test_streaming_adapter.py"
 
 & $python -u "$probe\streaming_probe.py" `
-  --model "$probe\assets\model\jvs" `
-  --runtime-root "$probe\assets\runtime" `
-  --input "$probe\assets\input\common_voice_ja_38833628_16k.wav" `
+  --model "$local\models\jvs" `
+  --runtime-root "$local\runtimes\probe-runtime" `
+  --input "$local\audio\common_voice_ja_38833628_16k.wav" `
   --output streaming_beatrice.wav `
   --quality QQ `
   --startup-buffer-samples 512 `
   --stress-seconds 600 `
-  --json-out "$probe\results\streaming_probe.json"
+  --json-out "$generated\results\streaming_probe.json"
 ```
 
 Dependency note: python-soxr 1.1.0 reports LGPL-2.1-or-later; any future packaged build must retain the required license notices and satisfy the LGPL terms.

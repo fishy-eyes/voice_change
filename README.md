@@ -136,6 +136,9 @@ The repository intentionally excludes:
 - benchmark outputs, result JSON, caches, and logs
 
 Do not commit third-party Runtime or model assets when adding experiments.
+Developers may organize such files under the fully ignored `local_assets/`
+tree described in `docs/PROJECT_STRUCTURE.md`; this is a convenience only, and
+the GUI continues to accept arbitrary external Runtime and model paths.
 
 ## Main controls
 
@@ -161,12 +164,20 @@ customization/      recording analysis, candidate search, evaluation, and profil
 effects/            stable AI adapter, final gain, and ordered effect manager
 gui/                PySide6 main window and backend-specific settings panels
 docs/                detailed technical documentation
-experiments/         source-only probes and quality tools; local assets are ignored
-models/              model profile locations; binary model assets are ignored
+experiments/         source-only probes, methods, and quality tools
+local_assets/        ignored developer-local Runtime/model/audio/generated data
+models/              user voice-model entry points and portable profile metadata
 packaging/           maintained Windows packaging metadata and scripts
+rvc_models/          ignored HuBERT/RMVPE foundation weights for RVC inference
 rvc_source/          vendored MIT-licensed RVC inference source
 tests/               unit, integration, GUI, real-model, and benchmark checks
 ```
+
+`models/rvc/` contains user RVC voice models, while `rvc_models/hubert/` and
+`rvc_models/rmvpe/` contain the shared RVC foundation models. A Beatrice model
+may be registered from `models/beatrice/` or any external folder; its Runtime
+is a separate dependency and never belongs under `models/`. See
+`docs/PROJECT_STRUCTURE.md` for the complete ownership rules.
 
 ## Validation
 
@@ -185,6 +196,6 @@ reported as a successful real-device test.
 
 ## Release scope
 
-`v2.0.0` is the first stable multi-backend source baseline. It is a Git source
-tag only: no Windows installer, proprietary Runtime, model archive, or GitHub
-Release asset is published as part of this source milestone.
+`v2.0.0` is the first stable multi-backend source baseline. Its GitHub Release
+includes the validated Windows x64 application archive, but no proprietary
+Beatrice Runtime or user/foundation model files are redistributed.

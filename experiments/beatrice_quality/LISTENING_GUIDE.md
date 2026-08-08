@@ -3,9 +3,9 @@
 Use headphones at a comfortable, low level. Do not try to remember every file.
 Start with only these three:
 
-1. `outputs/01_native_offline.wav`
-2. `outputs/02_streaming_QQ.wav`
-3. `outputs/04_streaming_HQ.wav`
+1. `local_assets/beatrice/generated/beatrice_quality/outputs/01_native_offline.wav`
+2. `local_assets/beatrice/generated/beatrice_quality/outputs/02_streaming_QQ.wav`
+3. `local_assets/beatrice/generated/beatrice_quality/outputs/04_streaming_HQ.wav`
 
 For each pair, answer only:
 

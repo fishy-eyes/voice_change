@@ -42,6 +42,11 @@ Path resolution order is:
 - Models: `models/beatrice/`, GUI-registered package folders, then
   `VOICE_CHANGE_BEATRICE_MODELS_DIR`.
 
+For repository development, ignored Beatrice assets may be organized under
+`local_assets/beatrice/runtimes/` and `local_assets/beatrice/models/`. These
+folders are not production defaults: select/register them through the GUI or
+the environment variables below, exactly like any other external path.
+
 The environment variables remain available for CLI, automated tests, and
 advanced users:
 

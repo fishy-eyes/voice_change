@@ -28,12 +28,13 @@ from customization.quality_checker import extract_audio_features
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-EXPERIMENT_ROOT = Path(__file__).resolve().parent
-OUTPUTS_DIR = EXPERIMENT_ROOT / "outputs"
-RESULTS_DIR = EXPERIMENT_ROOT / "results"
+LOCAL_BEATRICE_ROOT = REPO_ROOT / "local_assets" / "beatrice"
+GENERATED_DIR = LOCAL_BEATRICE_ROOT / "generated" / "beatrice_quality"
+OUTPUTS_DIR = GENERATED_DIR / "outputs"
+RESULTS_DIR = GENERATED_DIR / "results"
 DEFAULT_INPUT = REPO_ROOT / "tests" / "assets" / "input.wav"
-DEFAULT_MODEL_ROOT = REPO_ROOT / "experiments" / "beatrice_probe" / "assets" / "model"
-DEFAULT_RUNTIME_ROOT = REPO_ROOT / "experiments" / "beatrice_probe" / "assets" / "runtime"
+DEFAULT_MODEL_ROOT = LOCAL_BEATRICE_ROOT / "models"
+DEFAULT_RUNTIME_ROOT = LOCAL_BEATRICE_ROOT / "runtimes" / "probe-runtime"
 EXTERNAL_SAMPLE_RATE = 48_000
 CALLBACK_SAMPLES = 256
 
